@@ -456,12 +456,18 @@ def init_db(migrate_only=False, force=False, test_mode=False):
 
         print("Using default credentials:")
 
+        # Generate random password for test mode
+        import secrets
+        import string
+        alphabet = string.ascii_letters + string.digits
+        test_password = ''.join(secrets.choice(alphabet) for _ in range(16))
+
         default_creds = {
             'host': 'localhost',
             'port': '5432',
             'dbname': 'codex_db',
             'user': 'codex_user',
-            'password': 'Integotec@123'
+            'password': test_password
         }
 
         print(f"  Host: {default_creds['host']}")
@@ -522,7 +528,7 @@ def init_db(migrate_only=False, force=False, test_mode=False):
             print("  1. PostgreSQL is running: sudo systemctl status postgresql")
             print("  2. User exists: sudo -u postgres psql -c \"\\du codex_user\"")
             print("  3. Database exists: sudo -u postgres psql -c \"\\l codex_db\"")
-            print("  4. Password is correct: Integotec@123")
+            print("  4. Password matches the test database configuration")
             sys.exit(1)
 
     if not migrate_only:
