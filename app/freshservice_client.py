@@ -17,8 +17,7 @@ class FreshserviceClient:
 
     def __init__(self):
         """Initialize client with credentials from config."""
-        self.base_url = "https://integotecllc.freshservice.com"
-        self.api_key = self._get_credentials()
+        self.base_url, self.api_key = self._get_credentials()
         self.headers = self._build_headers()
 
     def _get_credentials(self):
@@ -33,11 +32,19 @@ class FreshserviceClient:
         if not config.has_section('freshservice'):
             raise ValueError("Freshservice configuration not found in codex.conf")
 
-        api_key = config.get('freshservice', 'api_key')
-        if not api_key:
-            raise ValueError("Freshservice API key not configured")
+        domain = config.get('freshservice', 'domain', fallback='')
+        api_key = config.get('freshservice', 'api_key', fallback='')
 
-        return api_key
+        if not domain or not api_key:
+            raise ValueError("Freshservice domain and API key must be configured")
+
+        # Ensure domain has https:// prefix
+        if not domain.startswith('http'):
+            base_url = f"https://{domain}"
+        else:
+            base_url = domain
+
+        return base_url, api_key
 
     def _build_headers(self):
         """Build authorization headers for API requests."""
@@ -150,7 +157,12 @@ class FreshserviceClient:
 
 # Legacy function for backward compatibility
 def get_freshservice_credentials():
-    """Load Freshservice API credentials from config file."""
+    """
+    Load Freshservice API credentials from config file.
+
+    Returns:
+        tuple: (base_url, api_key)
+    """
     config_path = os.path.join(current_app.instance_path, 'codex.conf')
     if not os.path.exists(config_path):
         raise ValueError(f"Config file not found: {config_path}")
@@ -161,11 +173,19 @@ def get_freshservice_credentials():
     if not config.has_section('freshservice'):
         raise ValueError("Freshservice configuration not found in codex.conf")
 
-    api_key = config.get('freshservice', 'api_key')
-    if not api_key:
-        raise ValueError("Freshservice API key not configured")
+    domain = config.get('freshservice', 'domain', fallback='')
+    api_key = config.get('freshservice', 'api_key', fallback='')
 
-    return api_key
+    if not domain or not api_key:
+        raise ValueError("Freshservice domain and API key must be configured")
+
+    # Ensure domain has https:// prefix
+    if not domain.startswith('http'):
+        base_url = f"https://{domain}"
+    else:
+        base_url = domain
+
+    return base_url, api_key
 
 
 def fetch_ticket_from_freshservice(ticket_id):
@@ -179,8 +199,8 @@ def fetch_ticket_from_freshservice(ticket_id):
         dict: Ticket data in the format expected by Brain Hair, or None if not found
     """
     try:
-        # Get credentials
-        api_key = get_freshservice_credentials()
+        # Get credentials and domain from config
+        base_url, api_key = get_freshservice_credentials()
 
         # Set up auth header
         auth_str = f"{api_key}:X"
@@ -191,7 +211,6 @@ def fetch_ticket_from_freshservice(ticket_id):
         }
 
         # Fetch ticket from FreshService
-        base_url = "https://integotecllc.freshservice.com"
         response = requests.get(
             f"{base_url}/api/v2/tickets/{ticket_id}",
             headers=headers,

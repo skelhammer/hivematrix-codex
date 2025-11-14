@@ -29,14 +29,18 @@ from extensions import db
 from models import Company, TicketDetail
 
 # Configuration
-FRESHSERVICE_DOMAIN = "integotecllc.freshservice.com"
 ACCOUNT_NUMBER_FIELD = "account_number"
 MAX_RETRIES = 3
 DEFAULT_TICKET_HOURS = 0.25  # 15 minutes default
 
 
 def get_freshservice_credentials():
-    """Load Freshservice API credentials from config file."""
+    """
+    Load Freshservice API credentials from config file.
+
+    Returns:
+        tuple: (base_url, api_key)
+    """
     config_path = os.path.join(app.instance_path, 'codex.conf')
     if not os.path.exists(config_path):
         raise ValueError(f"Config file not found: {config_path}")
@@ -47,11 +51,19 @@ def get_freshservice_credentials():
     if not config.has_section('freshservice'):
         raise ValueError("Freshservice configuration not found in codex.conf")
 
-    api_key = config.get('freshservice', 'api_key')
-    if not api_key:
-        raise ValueError("Freshservice API key not configured")
+    domain = config.get('freshservice', 'domain', fallback='')
+    api_key = config.get('freshservice', 'api_key', fallback='')
 
-    return api_key
+    if not domain or not api_key:
+        raise ValueError("Freshservice domain and API key must be configured")
+
+    # Ensure domain has https:// prefix
+    if not domain.startswith('http'):
+        base_url = f"https://{domain}"
+    else:
+        base_url = domain
+
+    return base_url, api_key
 
 
 def get_latest_ticket_timestamp():
@@ -261,17 +273,16 @@ def strip_html(html_content):
 def sync_tickets(full_sync=False):
     """Main sync function."""
     with app.app_context():
-        # Get Freshservice credentials
+        # Get Freshservice credentials and domain
         try:
-            api_key = get_freshservice_credentials()
+            base_url, api_key = get_freshservice_credentials()
         except Exception as e:
             print(f"ERROR: {e}", file=sys.stderr)
-            print("\nPlease ensure Freshservice API credentials are configured in instance/codex.conf", file=sys.stderr)
-            print("Add a section like:\n[freshservice]\napi_key = your_api_key_here", file=sys.stderr)
+            print("\nPlease ensure Freshservice domain and API key are configured in instance/codex.conf", file=sys.stderr)
+            print("Add a section like:\n[freshservice]\ndomain = your-domain.freshservice.com\napi_key = your_api_key_here", file=sys.stderr)
             return 1
 
         # Setup API authentication
-        base_url = f"https://{FRESHSERVICE_DOMAIN}"
         auth_str = f"{api_key}:X"
         encoded_auth = base64.b64encode(auth_str.encode()).decode()
         headers = {

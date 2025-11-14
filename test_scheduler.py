@@ -54,7 +54,7 @@ def test_freshservice_sync():
     print("\n✓ Sync workflow triggered successfully")
     print("\nNote: The sync runs in the background.")
     print("Check Codex logs to see progress:")
-    print("  cd /home/troy/projects/hivematrix/hivematrix-helm")
+    print("  cd <your-hivematrix-helm-directory>")
     print("  source pyenv/bin/activate")
     print("  python logs_cli.py codex --tail 50")
 
