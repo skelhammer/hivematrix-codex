@@ -11,7 +11,7 @@ from sqlalchemy.orm import sessionmaker
 # Add the project root to the path so we can import models
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from models import db, Company, Contact, Location, contact_company_link
+from models import db, Company, Contact, Location, contact_company_link, BillingPlan
 from app import app
 
 # --- Configuration ---
@@ -159,11 +159,75 @@ def populate_database(companies_data, users_data):
 
             # Additional fields (aliases for compatibility)
             company.billing_plan = custom_fields.get('plan_selected') or custom_fields.get('billing_plan')
-            company.contract_term_length = custom_fields.get('contract_term')
-            company.support_level = custom_fields.get('support_level')
+
+            # Contract term - normalize minor variations only
+            raw_term = custom_fields.get('contract_term')
+            if raw_term:
+                # Handle case variations and plurals
+                term_normalized = raw_term.lower()
+                if term_normalized in ['1 year']:
+                    company.contract_term_length = '1 Year'
+                elif term_normalized in ['2 year', '2 years']:
+                    company.contract_term_length = '2 Year'
+                elif term_normalized in ['3 year', '3 years']:
+                    company.contract_term_length = '3 Year'
+                elif term_normalized in ['month to month', 'monthly']:
+                    company.contract_term_length = 'Month to Month'
+                else:
+                    # Use as-is if already correct format
+                    company.contract_term_length = raw_term
+            else:
+                company.contract_term_length = None
+
+            # NOTE: support_level is NOT pulled from Freshservice - it comes from billing plan
             company.phone_system = custom_fields.get('phone_system')
             company.email_system = custom_fields.get('email_system')
             company.datto_portal_url = custom_fields.get('datto_portal_url')
+
+            # ALWAYS populate support_level from billing plan (Codex is source of truth)
+            if company.billing_plan and company.contract_term_length:
+                # Look up the billing plan in the database
+                billing_plan = BillingPlan.query.filter_by(
+                    plan_name=company.billing_plan,
+                    term_length=company.contract_term_length
+                ).first()
+
+                if billing_plan and billing_plan.support_level:
+                    company.support_level = billing_plan.support_level
+                else:
+                    # If no billing plan found, default to 'Billed Hourly'
+                    company.support_level = 'Billed Hourly'
+                    print(f"    → Warning: No billing plan found for '{company.billing_plan}' ({company.contract_term_length}), defaulting to 'Billed Hourly'")
+            else:
+                # No billing plan assigned
+                company.support_level = None
+
+            # Calculate contract_end_date from contract_start_date and contract_term_length
+            if company.contract_start_date and company.contract_term_length:
+                from datetime import datetime, timedelta
+                try:
+                    # Parse the contract start date
+                    if isinstance(company.contract_start_date, str):
+                        start_date_str = company.contract_start_date.split('T')[0]
+                        start_date = datetime.fromisoformat(start_date_str)
+                    else:
+                        start_date = company.contract_start_date
+
+                    # Calculate end date based on term length
+                    term = company.contract_term_length
+                    years_to_add = {'1 Year': 1, '2 Year': 2, '3 Year': 3}.get(term, 0)
+
+                    if years_to_add > 0:
+                        end_date = start_date.replace(year=start_date.year + years_to_add) - timedelta(days=1)
+                        company.contract_end_date = end_date.strftime('%Y-%m-%d')
+                    else:
+                        # Month to Month or other - no end date
+                        company.contract_end_date = None
+                except (ValueError, AttributeError) as e:
+                    print(f"    → Warning: Could not calculate contract end date: {e}")
+                    company.contract_end_date = None
+            else:
+                company.contract_end_date = None
 
             db.session.commit()
 

@@ -146,15 +146,14 @@ def company_details(account_number):
             }
 
             # Get all dynamic features from the plan
-            # Custom display name mapping for better readability
-            display_name_map = {
-                'sat': 'Security Awareness Training',
-                'soc': 'Security Operations Center',
-            }
+            # Load display names from database configuration
+            from models import FeatureCategoryConfig
+            feature_configs = FeatureCategoryConfig.query.all()
+            display_name_map = {config.feature_key: config.display_name for config in feature_configs}
 
             for plan_feature in plan_features.features:
                 feature_type = plan_feature.feature_type
-                # Use custom display name if available, otherwise format the feature_type
+                # Use configured display name if available, otherwise format the feature_type
                 display_name = display_name_map.get(feature_type, feature_type.replace('_', ' ').title())
 
                 if feature_type in overrides:
@@ -177,12 +176,12 @@ def company_details(account_number):
     phone_options = FeatureOption.query.filter_by(feature_type='phone').order_by(FeatureOption.display_name).all()
 
     # Get all feature options grouped by type for override dropdowns
-    all_feature_options = FeatureOption.query.order_by(FeatureOption.feature_type, FeatureOption.display_name).all()
+    all_feature_options = FeatureOption.query.order_by(FeatureOption.feature_category, FeatureOption.display_name).all()
     feature_options_by_type = {}
     for option in all_feature_options:
-        if option.feature_type not in feature_options_by_type:
-            feature_options_by_type[option.feature_type] = []
-        feature_options_by_type[option.feature_type].append(option.display_name)
+        if option.feature_category not in feature_options_by_type:
+            feature_options_by_type[option.feature_category] = []
+        feature_options_by_type[option.feature_category].append(option.display_name)
 
     # Get all billing plans for dropdown
     billing_plans = BillingPlan.query.with_entities(
@@ -190,10 +189,13 @@ def company_details(account_number):
     ).distinct().order_by(BillingPlan.plan_name).all()
     billing_plan_names = [p.plan_name for p in billing_plans]
 
-    # Get support level from plan if company doesn't have one set
-    effective_support_level = company.support_level
-    if not effective_support_level and plan_features:
+    # ALWAYS get support level from billing plan (plan is source of truth)
+    effective_support_level = None
+    if plan_features and plan_features.support_level:
         effective_support_level = plan_features.support_level
+    else:
+        # Fallback only if no billing plan assigned
+        effective_support_level = company.support_level or 'N/A'
 
     return render_template('companies/details.html',
                          user=g.user,

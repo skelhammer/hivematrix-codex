@@ -330,13 +330,165 @@ def delete_feature_option(option_id):
     return redirect(url_for('billing_plans.list_plans'))
 
 
+@billing_plans_bp.route('/api/plans', methods=['GET'])
+@token_required
+def api_get_all_plans():
+    """
+    API: Get all billing plans with complete data.
+    Returns all plans with pricing, features, and configuration.
+    """
+    from models import FeatureCategoryConfig
+
+    all_plans = BillingPlan.query.order_by(BillingPlan.plan_name, BillingPlan.term_length).all()
+
+    # Load feature display names from config
+    feature_configs = FeatureCategoryConfig.query.all()
+    feature_display_names = {config.feature_key: config.display_name for config in feature_configs}
+
+    plans_data = []
+    for plan in all_plans:
+        plan_dict = {
+            'id': plan.id,
+            'plan_name': plan.plan_name,
+            'term_length': plan.term_length,
+            'support_level': plan.support_level,
+
+            # Pricing
+            'per_user_cost': float(plan.per_user_cost or 0),
+            'per_workstation_cost': float(plan.per_workstation_cost or 0),
+            'per_server_cost': float(plan.per_server_cost or 0),
+            'per_vm_cost': float(plan.per_vm_cost or 0),
+            'per_switch_cost': float(plan.per_switch_cost or 0),
+            'per_firewall_cost': float(plan.per_firewall_cost or 0),
+            'per_hour_ticket_cost': float(plan.per_hour_ticket_cost or 0),
+
+            # Backup pricing
+            'backup_base_fee_workstation': float(plan.backup_base_fee_workstation or 0),
+            'backup_base_fee_server': float(plan.backup_base_fee_server or 0),
+            'backup_included_tb': float(plan.backup_included_tb or 1.0),
+            'backup_per_tb_fee': float(plan.backup_per_tb_fee or 0),
+
+            # Dynamic features
+            'features': {},
+            'feature_display_names': feature_display_names
+        }
+
+        # Add dynamic features from PlanFeature table
+        for plan_feature in plan.features:
+            plan_dict['features'][plan_feature.feature_type] = plan_feature.feature_value
+
+        plans_data.append(plan_dict)
+
+    return jsonify({
+        'status': 'success',
+        'plans': plans_data,
+        'count': len(plans_data)
+    })
+
+
+@billing_plans_bp.route('/api/plans/<plan_name>/<term_length>', methods=['GET'])
+@token_required
+def api_get_plan(plan_name, term_length):
+    """
+    API: Get a specific billing plan by name and term.
+    """
+    plan = BillingPlan.query.filter_by(
+        plan_name=plan_name,
+        term_length=term_length
+    ).first()
+
+    if not plan:
+        return jsonify({
+            'status': 'error',
+            'message': f'Plan not found: {plan_name} ({term_length})'
+        }), 404
+
+    plan_dict = {
+        'id': plan.id,
+        'plan_name': plan.plan_name,
+        'term_length': plan.term_length,
+        'support_level': plan.support_level,
+
+        # Pricing
+        'per_user_cost': float(plan.per_user_cost or 0),
+        'per_workstation_cost': float(plan.per_workstation_cost or 0),
+        'per_server_cost': float(plan.per_server_cost or 0),
+        'per_vm_cost': float(plan.per_vm_cost or 0),
+        'per_switch_cost': float(plan.per_switch_cost or 0),
+        'per_firewall_cost': float(plan.per_firewall_cost or 0),
+        'per_hour_ticket_cost': float(plan.per_hour_ticket_cost or 0),
+
+        # Backup pricing
+        'backup_base_fee_workstation': float(plan.backup_base_fee_workstation or 0),
+        'backup_base_fee_server': float(plan.backup_base_fee_server or 0),
+        'backup_included_tb': float(plan.backup_included_tb or 1.0),
+        'backup_per_tb_fee': float(plan.backup_per_tb_fee or 0),
+
+        # Dynamic features
+        'features': {}
+    }
+
+    # Add dynamic features
+    for plan_feature in plan.features:
+        plan_dict['features'][plan_feature.feature_type] = plan_feature.feature_value
+
+    return jsonify({
+        'status': 'success',
+        'plan': plan_dict
+    })
+
+
+@billing_plans_bp.route('/api/feature-options', methods=['GET'])
+@token_required
+def api_get_feature_options():
+    """
+    API: Get all feature options grouped by category.
+    """
+    all_features = FeatureOption.query.order_by(
+        FeatureOption.feature_category,
+        FeatureOption.option_value
+    ).all()
+
+    # Group by category
+    features_by_category = defaultdict(list)
+    for feature in all_features:
+        features_by_category[feature.feature_category].append({
+            'id': feature.id,
+            'category': feature.feature_category,
+            'value': feature.option_value,
+            'display_name': feature.display_name or feature.option_value,
+            'description': feature.description
+        })
+
+    return jsonify({
+        'status': 'success',
+        'features': dict(features_by_category),
+        'categories': sorted(features_by_category.keys())
+    })
+
+
+@billing_plans_bp.route('/api/feature-categories', methods=['GET'])
+@token_required
+def api_get_feature_categories():
+    """
+    API: Get all unique feature categories.
+    """
+    categories = db.session.query(FeatureOption.feature_category).distinct().all()
+    category_list = sorted([cat[0] for cat in categories])
+
+    return jsonify({
+        'status': 'success',
+        'categories': category_list,
+        'count': len(category_list)
+    })
+
+
 @billing_plans_bp.route('/api/bulk-plans', methods=['GET'])
 @token_required
 def bulk_plans_api():
     """
-    Bulk export API: Returns all unique billing plan configurations.
-    Returns plan_name+term_length -> features mapping for all plans.
-    This allows Ledger to fetch all plan data in ONE call.
+    DEPRECATED: Use /api/plans instead.
+    Legacy endpoint kept for backward compatibility.
     """
     from models import Company
 
