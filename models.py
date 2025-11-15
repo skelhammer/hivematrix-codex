@@ -293,6 +293,19 @@ class FeatureOption(db.Model):
     __table_args__ = (db.UniqueConstraint('feature_category', 'option_value', name='unique_feature_option'),)
 
 
+class FeatureCategoryConfig(db.Model):
+    """
+    Configuration for feature category display names.
+    Stores proper capitalization/formatting for feature names (e.g., 'soc' → 'SOC').
+    """
+    __tablename__ = 'feature_category_config'
+    id = db.Column(db.Integer, primary_key=True)
+    feature_key = db.Column(db.String(100), unique=True, nullable=False)  # 'soc', 'sat', 'antivirus', etc.
+    display_name = db.Column(db.String(150), nullable=False)  # 'SOC', 'SAT', 'Antivirus', etc.
+    full_name = db.Column(db.String(255))  # Optional: 'Security Operations Center', 'Security Awareness Training'
+    description = db.Column(db.Text)  # Optional description
+
+
 class PlanFeature(db.Model):
     """
     Dynamic feature storage for billing plans.
