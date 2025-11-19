@@ -860,6 +860,7 @@ def api_active_tickets():
     CLOSED_STATUS_ID = 5
     RESOLVED_STATUS_ID = 4
     JOB_COMPLETE_BILL_STATUS_ID = 15
+    BILLING_COMPLETE_CLOSE_STATUS_ID = 16
 
     # SLA thresholds by priority (time since last update)
     SLA_UPDATE_THRESHOLDS = {
@@ -888,7 +889,8 @@ def api_active_tickets():
         ON_HOLD_STATUS_ID: 'On Hold',
         WAITING_ON_AGENT_STATUS_ID: 'Customer Replied',
         PENDING_HUBSPOT_STATUS_ID: 'Pending Hubspot',
-        JOB_COMPLETE_BILL_STATUS_ID: 'Job Complete - Bill'
+        JOB_COMPLETE_BILL_STATUS_ID: 'Job Complete - Bill',
+        BILLING_COMPLETE_CLOSE_STATUS_ID: 'Billing Complete - Close'
     }
 
     # Load agent mapping from database
@@ -906,7 +908,7 @@ def api_active_tickets():
 
     # Build base query - all non-closed tickets
     query = TicketDetail.query.filter(
-        TicketDetail.status_id.notin_([CLOSED_STATUS_ID, RESOLVED_STATUS_ID, JOB_COMPLETE_BILL_STATUS_ID])
+        TicketDetail.status_id.notin_([CLOSED_STATUS_ID, RESOLVED_STATUS_ID, JOB_COMPLETE_BILL_STATUS_ID, BILLING_COMPLETE_CLOSE_STATUS_ID])
     )
 
     if group_id:
