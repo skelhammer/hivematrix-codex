@@ -894,6 +894,13 @@ def api_active_tickets():
     for agent in agents:
         agent_mapping[agent.id] = agent.name
 
+    # Load requester mapping from contacts
+    requester_mapping = {}
+    contacts = Contact.query.all()
+    for contact in contacts:
+        if contact.freshservice_id:
+            requester_mapping[contact.freshservice_id] = contact.name
+
     # Build base query - all non-closed tickets
     query = TicketDetail.query.filter(
         TicketDetail.status_id.notin_([CLOSED_STATUS_ID, RESOLVED_STATUS_ID])
@@ -990,6 +997,13 @@ def api_active_tickets():
         if t.responder_id:
             agent_name = agent_mapping.get(t.responder_id, f'Agent {t.responder_id}')
 
+        # Get requester name from ticket or lookup from contacts
+        requester_name = t.requester_name
+        if not requester_name and t.requester_id:
+            requester_name = requester_mapping.get(t.requester_id, f'Requester {t.requester_id}')
+        elif not requester_name:
+            requester_name = 'N/A'
+
         return {
             'id': t.ticket_id,
             'ticket_number': t.ticket_number,
@@ -1007,7 +1021,7 @@ def api_active_tickets():
             'company_id': t.company_account_number,
             'requester_id': t.requester_id,
             'requester_email': t.requester_email,
-            'requester_name': t.requester_name or 'N/A',
+            'requester_name': requester_name,
             'responder_id': t.responder_id,
             'agent_name': agent_name,
             'group_id': t.group_id,
