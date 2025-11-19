@@ -310,7 +310,8 @@ def update_my_settings():
             'success': True,
             'message': 'Settings updated successfully',
             'theme_preference': agent.theme_preference,
-            'knowledgetree_view_preference': agent.knowledgetree_view_preference
+            'knowledgetree_view_preference': agent.knowledgetree_view_preference,
+            'home_page_preference': agent.home_page_preference
         })
     except Exception as e:
         db.session.rollback()
