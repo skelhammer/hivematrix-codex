@@ -214,6 +214,31 @@ class DattoSiteLink(db.Model):
 
     company = db.relationship('Company', back_populates='datto_site_links')
 
+class FreshserviceAgent(db.Model):
+    """
+    Freshservice agents (technicians/staff) pulled from the Freshservice API.
+    Used for mapping responder_id to agent names in tickets.
+    """
+    __tablename__ = 'freshservice_agents'
+
+    id = db.Column(BigInteger, primary_key=True)  # Freshservice agent ID
+    email = db.Column(db.String(150))
+    first_name = db.Column(db.String(100))
+    last_name = db.Column(db.String(100))
+    active = db.Column(db.Boolean, default=True)
+    job_title = db.Column(db.String(150))
+    department_ids = db.Column(db.Text)  # JSON array of department IDs
+    group_ids = db.Column(db.Text)  # JSON array of group IDs
+    created_at = db.Column(db.String(50))
+    updated_at = db.Column(db.String(50))
+
+    @property
+    def name(self):
+        """Full name of the agent."""
+        if self.first_name and self.last_name:
+            return f"{self.first_name} {self.last_name}"
+        return self.first_name or self.last_name or f"Agent {self.id}"
+
 class TicketDetail(db.Model):
     __tablename__ = 'ticket_details'
     ticket_id = db.Column(BigInteger, primary_key=True)
@@ -223,13 +248,25 @@ class TicketDetail(db.Model):
     description = db.Column(db.Text)  # Initial ticket description
     description_text = db.Column(db.Text)  # Plain text version
     status = db.Column(db.String(50))
+    status_id = db.Column(db.Integer)  # Freshservice status ID
     priority = db.Column(db.String(50))
+    priority_id = db.Column(db.Integer)  # Freshservice priority ID (1=Low, 2=Medium, 3=High, 4=Urgent)
+    ticket_type = db.Column(db.String(50))  # 'Incident' or 'Service Request'
     requester_email = db.Column(db.String(150))
     requester_name = db.Column(db.String(150))
+    requester_id = db.Column(BigInteger)
+    responder_id = db.Column(BigInteger)  # Assigned agent ID
+    group_id = db.Column(BigInteger)  # Team/department ID
     created_at = db.Column(db.String(50))
     last_updated_at = db.Column(db.String(50))
     closed_at = db.Column(db.String(50))
     total_hours_spent = db.Column(db.Float, default=0.0)
+
+    # SLA tracking fields
+    fr_due_by = db.Column(db.String(50))  # First response due date
+    due_by = db.Column(db.String(50))  # Resolution due date
+    first_responded_at = db.Column(db.String(50))  # When first response was made
+    agent_responded_at = db.Column(db.String(50))  # When agent last responded
 
     # Conversation history stored as JSON
     conversations = db.Column(db.Text)  # JSON array of conversation entries

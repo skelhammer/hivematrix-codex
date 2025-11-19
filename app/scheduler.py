@@ -113,7 +113,7 @@ def init_scheduler(app):
 
         freshservice_schedule = app.config.get('SYNC_FRESHSERVICE_SCHEDULE', 'daily')
         datto_schedule = app.config.get('SYNC_DATTO_SCHEDULE', 'daily')
-        tickets_schedule = app.config.get('SYNC_TICKETS_SCHEDULE', 'hourly')
+        tickets_schedule = app.config.get('SYNC_TICKETS_SCHEDULE', 'frequent')
 
         # Schedule Freshservice sync (companies & contacts)
         if freshservice_enabled:
@@ -159,7 +159,16 @@ def init_scheduler(app):
 
         # Schedule Tickets sync
         if tickets_enabled:
-            if tickets_schedule == 'hourly':
+            if tickets_schedule == 'frequent':
+                scheduler.add_job(
+                    func=lambda: run_sync_script('sync_tickets_from_freshservice.py'),
+                    trigger=IntervalTrigger(minutes=3),
+                    id='tickets_sync',
+                    name='Sync Tickets',
+                    replace_existing=True
+                )
+                logger.info("Scheduled Tickets sync: Every 3 minutes")
+            elif tickets_schedule == 'hourly':
                 scheduler.add_job(
                     func=lambda: run_sync_script('sync_tickets_from_freshservice.py'),
                     trigger=IntervalTrigger(hours=1),

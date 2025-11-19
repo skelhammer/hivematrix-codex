@@ -2,7 +2,7 @@ from datetime import datetime
 from flask import render_template, g, jsonify, request
 from app import app
 from .auth import token_required, admin_required
-from models import Company, Contact, Asset, Location, TicketDetail, SyncJob, BillingPlan, PlanFeature, FeatureOption
+from models import Company, Contact, Asset, Location, TicketDetail, SyncJob, BillingPlan, PlanFeature, FeatureOption, FreshserviceAgent
 from extensions import db
 import subprocess
 import os
@@ -30,14 +30,19 @@ def index():
                          asset_count=asset_count,
                          billing_plan_count=billing_plan_count)
 
-def run_sync_script(job_id, script_path, follow_up_script=None):
+def run_sync_script(job_id, script_path, extra_args=None, follow_up_script=None):
     """Run sync script in background and update job status in database."""
     try:
         # Increase timeout for ticket sync (can take 2+ hours)
         timeout = 7200 if 'ticket' in script_path else 600  # 2 hours for tickets, 10 min for others
 
+        # Build command with optional extra arguments
+        cmd = ['python', script_path]
+        if extra_args:
+            cmd.extend(extra_args)
+
         result = subprocess.run(
-            ['python', script_path],
+            cmd,
             capture_output=True,
             text=True,
             timeout=timeout
@@ -110,7 +115,7 @@ def sync_freshservice():
         db.session.commit()
 
         # Start background thread with auto-run of account number creation
-        thread = threading.Thread(target=run_sync_script, args=(job_id, script_path, follow_up_script))
+        thread = threading.Thread(target=run_sync_script, args=(job_id, script_path, None, follow_up_script))
         thread.daemon = True
         thread.start()
 
@@ -145,7 +150,7 @@ def sync_datto():
         db.session.commit()
 
         # Start background thread with auto-run of push to datto
-        thread = threading.Thread(target=run_sync_script, args=(job_id, script_path, follow_up_script))
+        thread = threading.Thread(target=run_sync_script, args=(job_id, script_path, None, follow_up_script))
         thread.daemon = True
         thread.start()
 
@@ -549,6 +554,45 @@ def sync_tickets():
             'error': str(e)
         }), 500
 
+
+@app.route('/sync/tickets/full-history', methods=['POST'])
+@admin_required
+def sync_tickets_full_history():
+    """Trigger full history ticket sync (2 years) in background."""
+    try:
+        job_id = str(uuid.uuid4())
+        script_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'sync_tickets_from_freshservice.py')
+
+        # Create job entry in database
+        job = SyncJob(
+            id=job_id,
+            script='tickets_full_history',
+            status='running',
+            started_at=datetime.now().isoformat()
+        )
+        db.session.add(job)
+        db.session.commit()
+
+        # Start background thread with --full-history flag
+        thread = threading.Thread(
+            target=run_sync_script,
+            args=(job_id, script_path, ['--full-history'])
+        )
+        thread.daemon = True
+        thread.start()
+
+        return jsonify({
+            'success': True,
+            'job_id': job_id,
+            'message': 'Full history ticket sync started in background (2 years)'
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
 @app.route('/sync/last/<script_name>', methods=['GET'])
 @token_required
 def get_last_sync(script_name):
@@ -630,6 +674,299 @@ def api_list_tickets():
         'total': total_count,
         'offset': offset,
         'limit': limit
+    })
+
+
+@app.route('/api/tickets/active', methods=['GET'])
+@token_required
+def api_active_tickets():
+    """
+    Get all active (non-closed) tickets for the Beacon dashboard.
+
+    Query parameters:
+        group_id: Filter by group/department ID
+        responder_id: Filter by assigned agent ID
+
+    Returns tickets organized into 4 sections with full SLA processing:
+        section1: Needs first response or further action
+        section2: Waiting on agent (customer replied)
+        section3: Update overdue
+        section4: Other active (on hold, waiting customer, etc.)
+    """
+    import json
+    from datetime import datetime, timezone, timedelta
+
+    # Get query parameters
+    group_id = request.args.get('group_id', type=int)
+    responder_id = request.args.get('responder_id', type=int)
+
+    # Status IDs
+    OPEN_STATUS_ID = 2
+    PENDING_STATUS_ID = 3
+    WAITING_ON_CUSTOMER_STATUS_ID = 9
+    WAITING_ON_AGENT_STATUS_ID = 26
+    ON_HOLD_STATUS_ID = 23
+    UPDATE_NEEDED_STATUS_ID = 19
+    PENDING_HUBSPOT_STATUS_ID = 27
+    CLOSED_STATUS_ID = 5
+    RESOLVED_STATUS_ID = 4
+
+    # SLA thresholds by priority (time since last update)
+    SLA_UPDATE_THRESHOLDS = {
+        4: timedelta(minutes=30),   # Urgent
+        3: timedelta(days=2),       # High
+        2: timedelta(days=3),       # Medium
+        1: timedelta(days=4)        # Low
+    }
+
+    # FR SLA thresholds
+    FR_SLA_CRITICAL_HOURS = 4
+    FR_SLA_WARNING_HOURS = 12
+
+    # Priority text mapping
+    PRIORITY_MAP = {1: 'Low', 2: 'Medium', 3: 'High', 4: 'Urgent'}
+
+    # Status text mapping
+    STATUS_MAP = {
+        OPEN_STATUS_ID: 'Open',
+        PENDING_STATUS_ID: 'Pending',
+        8: 'Scheduled',
+        WAITING_ON_CUSTOMER_STATUS_ID: 'Waiting on Customer',
+        10: 'Waiting on Third Party',
+        13: 'Under Investigation',
+        UPDATE_NEEDED_STATUS_ID: 'Update Needed',
+        ON_HOLD_STATUS_ID: 'On Hold',
+        WAITING_ON_AGENT_STATUS_ID: 'Customer Replied',
+        PENDING_HUBSPOT_STATUS_ID: 'Pending Hubspot'
+    }
+
+    # Load agent mapping from database
+    agent_mapping = {}
+    agents = FreshserviceAgent.query.all()
+    for agent in agents:
+        agent_mapping[agent.id] = agent.name
+
+    # Build base query - all non-closed tickets
+    query = TicketDetail.query.filter(
+        TicketDetail.status_id.notin_([CLOSED_STATUS_ID, RESOLVED_STATUS_ID])
+    )
+
+    if group_id:
+        query = query.filter_by(group_id=group_id)
+    if responder_id:
+        query = query.filter_by(responder_id=responder_id)
+
+    tickets = query.all()
+    now = datetime.now(timezone.utc)
+
+    def parse_datetime(dt_str):
+        """Parse datetime string to datetime object."""
+        if not dt_str:
+            return None
+        try:
+            if dt_str.endswith('Z'):
+                dt_str = dt_str[:-1] + '+00:00'
+            return datetime.fromisoformat(dt_str)
+        except:
+            return None
+
+    def time_since(dt_obj):
+        """Get friendly time since string."""
+        if not dt_obj:
+            return 'N/A'
+        diff = now - dt_obj
+        seconds = diff.total_seconds()
+        days = diff.days
+
+        if days < 0:
+            return 'in the future'
+        if days >= 1:
+            return f'{days}d ago'
+        if seconds >= 3600:
+            return f'{int(seconds // 3600)}h ago'
+        if seconds >= 60:
+            return f'{int(seconds // 60)}m ago'
+        return 'Just now'
+
+    def days_since(dt_obj):
+        """Get days old string."""
+        if not dt_obj:
+            return 'N/A'
+        diff_days = (now.date() - dt_obj.date()).days
+
+        if diff_days < 0:
+            return 'Future Date'
+        if diff_days == 0:
+            return 'Today'
+        if diff_days == 1:
+            return '1 day old'
+        return f'{diff_days} days old'
+
+    def get_fr_sla_details(ticket_type, target_due_dt):
+        """Calculate FR SLA status."""
+        sla_prefix = 'Due' if ticket_type == 'Service Request' else 'FR'
+
+        if not target_due_dt:
+            return f'No {sla_prefix} Due Date', 'sla-none', float('inf')
+
+        time_diff_seconds = (target_due_dt - now).total_seconds()
+        hours_remaining = time_diff_seconds / 3600.0
+
+        # Format time remaining
+        if abs(time_diff_seconds) >= (2 * 24 * 60 * 60):
+            formatted = f'{hours_remaining / 24.0:.1f} days'
+        elif abs(time_diff_seconds) >= 3600:
+            formatted = f'{hours_remaining:.1f} hours'
+        elif abs(time_diff_seconds) >= 60:
+            formatted = f'{time_diff_seconds / 60.0:.0f} min'
+        else:
+            formatted = f'{time_diff_seconds:.0f} sec'
+
+        if hours_remaining < 0:
+            return f'{sla_prefix} Overdue by {formatted.lstrip("-")}', 'sla-overdue', hours_remaining
+        elif hours_remaining < FR_SLA_CRITICAL_HOURS:
+            return f'{formatted} for {sla_prefix}', 'sla-critical', hours_remaining
+        elif hours_remaining < FR_SLA_WARNING_HOURS:
+            return f'{formatted} for {sla_prefix}', 'sla-warning', hours_remaining
+        else:
+            return f'{formatted} for {sla_prefix}', 'sla-normal', hours_remaining
+
+    def serialize_ticket(t, sla_text, sla_class):
+        """Serialize ticket with all processed fields."""
+        updated_dt = parse_datetime(t.last_updated_at)
+        created_dt = parse_datetime(t.created_at)
+        agent_responded_dt = parse_datetime(t.agent_responded_at)
+
+        # Get agent name from mapping or use ID fallback
+        agent_name = 'Unassigned'
+        if t.responder_id:
+            agent_name = agent_mapping.get(t.responder_id, f'Agent {t.responder_id}')
+
+        return {
+            'id': t.ticket_id,
+            'ticket_number': t.ticket_number,
+            'subject': t.subject,
+            'description_text': t.description_text,
+            'status': t.status,
+            'status_id': t.status_id,
+            'status_text': STATUS_MAP.get(t.status_id, f'Status {t.status_id}'),
+            'priority': t.priority,
+            'priority_id': t.priority_id,
+            'priority_raw': t.priority_id,
+            'priority_text': PRIORITY_MAP.get(t.priority_id, f'P-{t.priority_id}'),
+            'type': t.ticket_type,
+            'ticket_type': t.ticket_type,
+            'company_id': t.company_account_number,
+            'requester_id': t.requester_id,
+            'requester_email': t.requester_email,
+            'requester_name': t.requester_name or 'N/A',
+            'responder_id': t.responder_id,
+            'agent_name': agent_name,
+            'group_id': t.group_id,
+            'created_at_str': t.created_at,
+            'updated_at_str': t.last_updated_at,
+            'fr_due_by_str': t.fr_due_by,
+            'due_by_str': t.due_by,
+            'first_responded_at_iso': t.first_responded_at,
+            'agent_responded_at': t.agent_responded_at,
+            'updated_friendly': time_since(updated_dt),
+            'created_days_old': days_since(created_dt),
+            'agent_responded_friendly': time_since(agent_responded_dt),
+            'sla_text': sla_text,
+            'sla_class': sla_class,
+            'total_hours_spent': float(t.total_hours_spent or 0)
+        }
+
+    # Categorize tickets into sections
+    section1 = []  # Needs first response or action
+    section2 = []  # Waiting on agent (customer replied)
+    section3 = []  # Update overdue
+    section4 = []  # Other active
+
+    for ticket in tickets:
+        updated_dt = parse_datetime(ticket.last_updated_at)
+        status_text = STATUS_MAP.get(ticket.status_id, f'Status {ticket.status_id}')
+        updated_friendly = time_since(updated_dt)
+
+        # Check if update is overdue based on priority
+        is_update_overdue = False
+        if updated_dt and ticket.priority_id:
+            threshold = SLA_UPDATE_THRESHOLDS.get(ticket.priority_id, timedelta(days=3))
+            is_update_overdue = (now - updated_dt) > threshold
+
+        # Section 2: Customer Replied (Waiting on Agent)
+        if ticket.status_id == WAITING_ON_AGENT_STATUS_ID:
+            sla_text = f'Customer Replied ({updated_friendly})'
+            sla_class = 'sla-warning'
+            section2.append(serialize_ticket(ticket, sla_text, sla_class))
+            continue
+
+        # Section 4: Pending Hubspot (special status)
+        if ticket.status_id == PENDING_HUBSPOT_STATUS_ID:
+            sla_text = f'Pending Hubspot ({updated_friendly})'
+            sla_class = 'sla-none'
+            section4.append(serialize_ticket(ticket, sla_text, sla_class))
+            continue
+
+        # Section 3: Update overdue (but not for waiting/hold statuses)
+        if is_update_overdue and ticket.status_id not in [WAITING_ON_CUSTOMER_STATUS_ID, ON_HOLD_STATUS_ID, PENDING_HUBSPOT_STATUS_ID]:
+            sla_text = f'Update Overdue ({status_text}, {updated_friendly})'
+            sla_class = 'sla-critical'
+            section3.append(serialize_ticket(ticket, sla_text, sla_class))
+            continue
+
+        # Section 1: Open tickets needing first response or action
+        if ticket.status_id in [OPEN_STATUS_ID, UPDATE_NEEDED_STATUS_ID, PENDING_STATUS_ID]:
+            needs_fr = not ticket.first_responded_at
+
+            if needs_fr:
+                # Calculate FR SLA
+                sla_target = ticket.due_by if ticket.ticket_type == 'Service Request' else ticket.fr_due_by
+                sla_target_dt = parse_datetime(sla_target)
+                sla_text, sla_class, _ = get_fr_sla_details(ticket.ticket_type, sla_target_dt)
+            else:
+                sla_text = f'{status_text} (FR Met)'
+                sla_class = 'sla-responded'
+
+            section1.append(serialize_ticket(ticket, sla_text, sla_class))
+            continue
+
+        # Section 4: Other active (Waiting on Customer, On Hold, etc.)
+        if ticket.status_id == WAITING_ON_CUSTOMER_STATUS_ID:
+            agent_responded_dt = parse_datetime(ticket.agent_responded_at)
+            agent_responded_friendly = time_since(agent_responded_dt)
+            sla_text = 'Waiting on Customer'
+            if agent_responded_friendly != 'N/A':
+                sla_text += f' (Agent: {agent_responded_friendly})'
+            sla_class = 'sla-responded'
+        elif ticket.status_id == ON_HOLD_STATUS_ID:
+            sla_text = f'On Hold ({updated_friendly})'
+            sla_class = 'sla-none'
+        else:
+            sla_text = f'{status_text} ({updated_friendly})'
+            sla_class = 'sla-in-progress'
+
+        section4.append(serialize_ticket(ticket, sla_text, sla_class))
+
+    # Sort sections by priority (urgent first) then by updated time
+    def sort_key(t):
+        priority = t.get('priority_raw', 1) or 1
+        # For section 1, also consider FR SLA urgency
+        updated = t.get('updated_at_str', '') or ''
+        return (-(priority or 1), updated)
+
+    section1.sort(key=sort_key)
+    section2.sort(key=sort_key)
+    section3.sort(key=sort_key)
+    section4.sort(key=sort_key)
+
+    return jsonify({
+        'section1': section1,
+        'section2': section2,
+        'section3': section3,
+        'section4': section4,
+        'total_active': len(tickets),
+        'last_updated': now.isoformat()
     })
 
 
@@ -846,12 +1183,52 @@ def api_get_device(device_id):
 
 
 @app.route('/health', methods=['GET'])
+@app.route('/api/health', methods=['GET'])
 def health_check():
     """Health check endpoint for monitoring"""
     return {
         'status': 'healthy',
         'timestamp': datetime.utcnow().isoformat()
     }
+
+
+@app.route('/api/config/freshservice_domain', methods=['GET'])
+@token_required
+def api_get_freshservice_domain():
+    """Get Freshservice domain from Codex configuration."""
+    import configparser
+    import os
+
+    config_file = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'instance', 'codex.conf')
+
+    try:
+        config = configparser.ConfigParser()
+        config.read(config_file)
+        domain = config.get('freshservice', 'domain', fallback='freshservice.com')
+        return jsonify({'value': domain})
+    except Exception as e:
+        return jsonify({'value': 'freshservice.com', 'error': str(e)})
+
+
+@app.route('/api/agents', methods=['GET'])
+@token_required
+def api_get_agents():
+    """
+    Get list of Freshservice agents from database.
+
+    Returns list of agents with id and name.
+    """
+    agents = FreshserviceAgent.query.filter_by(active=True).all()
+
+    result = [
+        {'id': agent.id, 'name': agent.name}
+        for agent in agents
+    ]
+
+    # Sort by name
+    result.sort(key=lambda a: a['name'])
+
+    return jsonify(result)
 
 
 # ===== BILLING PLAN ENDPOINTS =====

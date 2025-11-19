@@ -11,7 +11,7 @@ from sqlalchemy.orm import sessionmaker
 # Add the project root to the path so we can import models
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from models import db, Company, Contact, Location, contact_company_link, BillingPlan
+from models import db, Company, Contact, Location, contact_company_link, BillingPlan, FreshserviceAgent
 from app import app
 
 # --- Configuration ---
@@ -92,7 +92,42 @@ def get_all_users(base_url, headers):
     print(f" Found {len(all_users)} total users in Freshservice.")
     return all_users
 
-def populate_database(companies_data, users_data):
+def get_all_agents(base_url, headers):
+    """Fetches all agents (technicians) from Freshservice."""
+    print("\nFetching all agents from Freshservice...")
+    all_agents = []
+    page = 1
+    endpoint = f"{base_url}/api/v2/agents"
+
+    while True:
+        params = {'page': page, 'per_page': 100}
+        try:
+            response = requests.get(endpoint, headers=headers, params=params, timeout=30)
+
+            if response.status_code == 429:
+                retry_after = int(response.headers.get('Retry-After', 5))
+                print(f"   -> Rate limit exceeded, waiting {retry_after}s...")
+                time.sleep(retry_after)
+                continue
+
+            response.raise_for_status()
+            data = response.json()
+            agents_on_page = data.get('agents', [])
+
+            if not agents_on_page:
+                break
+
+            all_agents.extend(agents_on_page)
+            page += 1
+
+        except requests.exceptions.RequestException as e:
+            print(f"   -> Error fetching agents on page {page}: {e}", file=sys.stderr)
+            return None
+
+    print(f" Found {len(all_agents)} total agents in Freshservice.")
+    return all_agents
+
+def populate_database(companies_data, users_data, agents_data=None):
     """Populates the Codex database with companies and contacts."""
     print("\nStarting database population...")
 
@@ -393,6 +428,55 @@ def populate_database(companies_data, users_data):
 
         print(" -> Finished processing contacts.")
 
+        # --- AGENT PROCESSING ---
+        if agents_data:
+            print("\nProcessing agents...")
+            agents_created = 0
+            agents_updated = 0
+
+            for agent_data in agents_data:
+                agent_id = agent_data.get('id')
+                if not agent_id:
+                    continue
+
+                try:
+                    existing_agent = db.session.get(FreshserviceAgent, agent_id)
+
+                    if existing_agent:
+                        # Update existing agent
+                        existing_agent.email = agent_data.get('email')
+                        existing_agent.first_name = agent_data.get('first_name')
+                        existing_agent.last_name = agent_data.get('last_name')
+                        existing_agent.active = agent_data.get('active', True)
+                        existing_agent.job_title = agent_data.get('job_title')
+                        existing_agent.department_ids = json.dumps(agent_data.get('department_ids', []))
+                        existing_agent.group_ids = json.dumps(agent_data.get('group_ids', []))
+                        existing_agent.updated_at = agent_data.get('updated_at')
+                        agents_updated += 1
+                    else:
+                        # Create new agent
+                        new_agent = FreshserviceAgent(
+                            id=agent_id,
+                            email=agent_data.get('email'),
+                            first_name=agent_data.get('first_name'),
+                            last_name=agent_data.get('last_name'),
+                            active=agent_data.get('active', True),
+                            job_title=agent_data.get('job_title'),
+                            department_ids=json.dumps(agent_data.get('department_ids', [])),
+                            group_ids=json.dumps(agent_data.get('group_ids', [])),
+                            created_at=agent_data.get('created_at'),
+                            updated_at=agent_data.get('updated_at')
+                        )
+                        db.session.add(new_agent)
+                        agents_created += 1
+
+                except Exception as e:
+                    print(f"  -> ERROR processing agent {agent_id}: {e}", file=sys.stderr)
+
+            db.session.commit()
+            print(f" -> Agents created: {agents_created}, updated: {agents_updated}")
+            print(" -> Finished processing agents.")
+
         # --- CONTACT DELETION ---
         # Delete contacts that exist in Codex but not in Freshservice
         print("\nChecking for deleted contacts...")
@@ -439,9 +523,10 @@ if __name__ == "__main__":
         # Fetch data from Freshservice
         companies = get_all_companies(BASE_URL, fs_headers)
         users = get_all_users(BASE_URL, fs_headers)
+        agents = get_all_agents(BASE_URL, fs_headers)
 
         if companies and users:
-            populate_database(companies, users)
+            populate_database(companies, users, agents)
             print("\n--- Freshservice Data Sync Successful ---")
         else:
             print("\n--- Freshservice Data Sync Failed: Could not fetch data from Freshservice ---")

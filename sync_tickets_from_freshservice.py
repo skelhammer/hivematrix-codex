@@ -2,8 +2,9 @@
 """
 Sync Ticket Details from Freshservice to Codex Database
 
-This script fetches closed tickets from Freshservice and stores them in the Codex database.
-It tracks the last sync timestamp to only pull new/updated tickets on subsequent runs.
+This script fetches all tickets (open, pending, closed, etc.) from Freshservice and stores
+them in the Codex database. It tracks the last sync timestamp to only pull new/updated
+tickets on subsequent runs. This provides ticket data for the Beacon dashboard.
 """
 
 import requests
@@ -66,7 +67,7 @@ def get_freshservice_credentials():
     return base_url, api_key
 
 
-def get_latest_ticket_timestamp():
+def get_latest_ticket_timestamp(full_history=False):
     """Gets the timestamp of the most recently updated ticket in the database."""
     latest = db.session.query(db.func.max(TicketDetail.last_updated_at)).scalar()
 
@@ -77,8 +78,14 @@ def get_latest_ticket_timestamp():
         except:
             pass
 
-    print("No existing tickets found. Performing initial sync for the past year.")
-    return datetime.now(timezone.utc) - timedelta(days=365)
+    # No existing tickets - determine initial sync range
+    if full_history:
+        print("No existing tickets found. Performing FULL HISTORY sync for the past 2 years.")
+        return datetime.now(timezone.utc) - timedelta(days=730)
+    else:
+        print("No existing tickets found. Performing initial sync for the past 30 days.")
+        print("(Use --full-history for complete ticket history)")
+        return datetime.now(timezone.utc) - timedelta(days=30)
 
 
 def get_company_map_from_api(base_url, headers):
@@ -133,13 +140,13 @@ def get_company_map_from_api(base_url, headers):
 
 
 def get_updated_tickets(base_url, headers, since_timestamp):
-    """Fetch all closed tickets updated since the given timestamp."""
+    """Fetch all tickets updated since the given timestamp."""
     all_tickets = []
     since_str = since_timestamp.strftime('%Y-%m-%dT%H:%M:%SZ')
-    query = f"(updated_at:>'{since_str}' AND status:5)"  # Status 5 = Closed
+    query = f"updated_at:>'{since_str}'"  # All tickets, any status
     page = 1
 
-    print(f"Fetching CLOSED tickets updated since {since_str}...")
+    print(f"Fetching ALL tickets updated since {since_str}...")
 
     while True:
         params = {'query': f'"{query}"', 'page': page, 'per_page': 100}
@@ -270,8 +277,13 @@ def strip_html(html_content):
     return text
 
 
-def sync_tickets(full_sync=False):
-    """Main sync function."""
+def sync_tickets(full_sync=False, full_history=False):
+    """Main sync function.
+
+    Args:
+        full_sync: Clear all tickets and re-sync from scratch
+        full_history: For initial sync, pull 2 years instead of 30 days
+    """
     with app.app_context():
         # Get Freshservice credentials and domain
         try:
@@ -301,9 +313,9 @@ def sync_tickets(full_sync=False):
             print("Full sync requested. Clearing existing ticket data...")
             TicketDetail.query.delete()
             db.session.commit()
-            last_sync_time = datetime.now(timezone.utc) - timedelta(days=365)
+            last_sync_time = datetime.now(timezone.utc) - timedelta(days=730)
         else:
-            last_sync_time = get_latest_ticket_timestamp()
+            last_sync_time = get_latest_ticket_timestamp(full_history=full_history)
 
         # Fetch tickets
         tickets = get_updated_tickets(base_url, headers, last_sync_time)
@@ -350,13 +362,54 @@ def sync_tickets(full_sync=False):
             ticket_record.subject = ticket.get('subject', 'No Subject')
             ticket_record.description = ticket.get('description', '')
             ticket_record.description_text = strip_html(ticket.get('description_text') or ticket.get('description', ''))
-            ticket_record.status = ticket.get('status_name', 'Closed')
-            ticket_record.priority = ticket.get('priority_name', 'Medium')
-            ticket_record.requester_email = ticket.get('requester', {}).get('email') if isinstance(ticket.get('requester'), dict) else None
-            ticket_record.requester_name = ticket.get('requester', {}).get('name') if isinstance(ticket.get('requester'), dict) else None
+
+            # Status mapping
+            status_map = {2: 'Open', 3: 'Pending', 4: 'Resolved', 5: 'Closed',
+                         9: 'Waiting on Customer', 23: 'On Hold', 26: 'Waiting on Agent',
+                         19: 'Update Needed', 27: 'Pending Hubspot'}
+            status_id = ticket.get('status')
+            ticket_record.status_id = status_id
+            ticket_record.status = status_map.get(status_id, ticket.get('status_name', 'Unknown'))
+
+            # Priority mapping
+            priority_map = {1: 'Low', 2: 'Medium', 3: 'High', 4: 'Urgent'}
+            priority_id = ticket.get('priority')
+            ticket_record.priority_id = priority_id
+            ticket_record.priority = priority_map.get(priority_id, ticket.get('priority_name', 'Medium'))
+
+            # Ticket type
+            ticket_record.ticket_type = ticket.get('type', 'Incident')
+
+            # Requester info
+            requester = ticket.get('requester', {})
+            if isinstance(requester, dict):
+                ticket_record.requester_email = requester.get('email')
+                ticket_record.requester_name = requester.get('name')
+            ticket_record.requester_id = ticket.get('requester_id')
+
+            # Assignment info
+            ticket_record.responder_id = ticket.get('responder_id')
+            ticket_record.group_id = ticket.get('group_id')
+
+            # Timestamps
             ticket_record.created_at = ticket.get('created_at')
             ticket_record.last_updated_at = ticket.get('updated_at')
-            ticket_record.closed_at = ticket.get('updated_at')
+
+            # Only set closed_at if ticket is actually closed
+            if status_id == 5:
+                ticket_record.closed_at = ticket.get('updated_at')
+            else:
+                ticket_record.closed_at = None
+
+            # SLA fields
+            ticket_record.fr_due_by = ticket.get('fr_due_by')
+            ticket_record.due_by = ticket.get('due_by')
+
+            # Stats (first response times)
+            stats = ticket.get('stats', {}) or {}
+            ticket_record.first_responded_at = stats.get('first_responded_at')
+            ticket_record.agent_responded_at = stats.get('agent_responded_at')
+
             ticket_record.total_hours_spent = total_hours
 
             # Store conversations as JSON
@@ -407,9 +460,12 @@ def sync_tickets(full_sync=False):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Sync ticket details from Freshservice to Codex.")
-    parser.add_argument('--full-sync', action='store_true', help="Force a full sync of all tickets from the past year.")
+    parser.add_argument('--full-sync', action='store_true',
+                       help="Clear all tickets and re-sync from scratch (2 years of history)")
+    parser.add_argument('--full-history', action='store_true',
+                       help="For initial sync, pull 2 years of history instead of 30 days")
     args = parser.parse_args()
 
     print("--- Codex Ticket Sync Script ---")
-    exit_code = sync_tickets(full_sync=args.full_sync)
+    exit_code = sync_tickets(full_sync=args.full_sync, full_history=args.full_history)
     sys.exit(exit_code)
