@@ -80,12 +80,13 @@ def get_latest_ticket_timestamp(full_history=False):
 
     # No existing tickets - determine initial sync range
     if full_history:
-        print("No existing tickets found. Performing FULL HISTORY sync for the past 2 years.")
-        return datetime.now(timezone.utc) - timedelta(days=730)
+        print("No existing tickets found. Performing FULL HISTORY sync (all time).")
+        # Use year 2000 as a safe starting point to get all tickets
+        return datetime(2000, 1, 1, tzinfo=timezone.utc)
     else:
-        print("No existing tickets found. Performing initial sync for the past 30 days.")
+        print("No existing tickets found. Performing initial sync for the past 3 months.")
         print("(Use --full-history for complete ticket history)")
-        return datetime.now(timezone.utc) - timedelta(days=30)
+        return datetime.now(timezone.utc) - timedelta(days=90)
 
 
 def get_company_map_from_api(base_url, headers):
@@ -139,14 +140,34 @@ def get_company_map_from_api(base_url, headers):
     return fs_id_to_account_map
 
 
-def get_updated_tickets(base_url, headers, since_timestamp):
-    """Fetch all tickets updated since the given timestamp."""
+def get_updated_tickets(base_url, headers, since_timestamp=None, open_only=True):
+    """Fetch tickets from Freshservice.
+
+    Args:
+        base_url: Freshservice API base URL
+        headers: API headers with auth
+        since_timestamp: Only fetch tickets updated after this time (optional)
+        open_only: If True, only fetch open tickets (excludes closed/resolved)
+    """
     all_tickets = []
-    since_str = since_timestamp.strftime('%Y-%m-%dT%H:%M:%SZ')
-    query = f"updated_at:>'{since_str}'"  # All tickets, any status
     page = 1
 
-    print(f"Fetching ALL tickets updated since {since_str}...")
+    # Build query based on parameters
+    if open_only:
+        # Fetch all non-closed tickets using known active statuses
+        # These are the statuses we want to show in Beacon
+        active_statuses = [2, 3, 8, 9, 10, 13, 19, 23, 26, 27]
+        status_conditions = [f"status:{s}" for s in active_statuses]
+        query = f"({' OR '.join(status_conditions)})"
+        print(f"Fetching ALL open tickets (excluding closed/resolved)...")
+    elif since_timestamp:
+        since_str = since_timestamp.strftime('%Y-%m-%dT%H:%M:%SZ')
+        query = f"updated_at:>'{since_str}'"
+        print(f"Fetching ALL tickets updated since {since_str}...")
+    else:
+        # Fetch everything from the beginning
+        query = "updated_at:>'2000-01-01T00:00:00Z'"
+        print(f"Fetching ALL tickets (full history)...")
 
     while True:
         params = {'query': f'"{query}"', 'page': page, 'per_page': 100}
@@ -308,17 +329,19 @@ def sync_tickets(full_sync=False, full_history=False):
             print("ERROR: Could not build company map. Aborting.", file=sys.stderr)
             return 1
 
-        # Determine sync start time
+        # Determine what to fetch
         if full_sync:
             print("Full sync requested. Clearing existing ticket data...")
             TicketDetail.query.delete()
             db.session.commit()
-            last_sync_time = datetime.now(timezone.utc) - timedelta(days=730)
+            # Fetch ALL tickets (including closed) from all time
+            tickets = get_updated_tickets(base_url, headers, open_only=False)
+        elif full_history:
+            # Fetch ALL tickets (including closed) from all time
+            tickets = get_updated_tickets(base_url, headers, open_only=False)
         else:
-            last_sync_time = get_latest_ticket_timestamp(full_history=full_history)
-
-        # Fetch tickets
-        tickets = get_updated_tickets(base_url, headers, last_sync_time)
+            # Regular sync: Fetch all OPEN tickets (any age)
+            tickets = get_updated_tickets(base_url, headers, open_only=True)
         if tickets is None:
             print("ERROR: Failed to fetch tickets. Aborting.", file=sys.stderr)
             return 1

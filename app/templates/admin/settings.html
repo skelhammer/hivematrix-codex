@@ -60,7 +60,7 @@
                     <button class="btn btn--primary" onclick="syncTicketsFullHistory()" id="sync-tickets-history-btn">
                         <span class="btn__label">
                             <i data-lucide="history" class="btn__icon"></i>
-                            Freshservice History (2yr)
+                            Freshservice History (All)
                         </span>
                     </button>
                     <button class="btn btn--primary" onclick="syncAgents()" id="sync-agents-btn">
@@ -701,13 +701,13 @@ sync_run_on_startup = false</code></pre>
         }
 
         function syncTicketsFullHistory() {
-            if (!confirm('This will sync 2 years of Freshservice ticket history. This may take a long time. Continue?')) {
+            if (!confirm('This will sync ALL Freshservice ticket history. This may take a long time. Continue?')) {
                 return;
             }
             startSync(
                 '{{ url_for("sync_tickets_full_history") }}',
                 'sync-tickets-history-btn',
-                'Freshservice History (2yr)',
+                'Freshservice History (All)',
                 'Freshservice Tickets Full History'
             );
         }
