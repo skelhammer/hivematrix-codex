@@ -593,6 +593,154 @@ def sync_tickets_full_history():
         }), 500
 
 
+@app.route('/sync/agents', methods=['POST'])
+@admin_required
+def sync_keycloak_agents():
+    """Trigger Keycloak agent sync in background."""
+    import requests as http_requests
+
+    def run_agent_sync(job_id):
+        """Background function to sync agents from Keycloak."""
+        from models import Agent
+
+        try:
+            # Get Keycloak admin token
+            keycloak_url = app.config.get('KEYCLOAK_SERVER_URL', 'http://localhost:8080')
+            admin_user = app.config.get('KEYCLOAK_ADMIN_USER', 'admin')
+            admin_pass = app.config.get('KEYCLOAK_ADMIN_PASS', 'admin')
+            realm = app.config.get('KEYCLOAK_REALM', 'hivematrix')
+
+            token_url = f"{keycloak_url}/realms/master/protocol/openid-connect/token"
+
+            output_lines = ["Starting Keycloak agent sync...\n"]
+
+            # Get admin token
+            response = http_requests.post(token_url, data={
+                'client_id': 'admin-cli',
+                'username': admin_user,
+                'password': admin_pass,
+                'grant_type': 'password'
+            }, timeout=5)
+
+            if response.status_code != 200:
+                raise Exception(f"Failed to get Keycloak admin token: {response.status_code}")
+
+            token = response.json().get('access_token')
+            output_lines.append("Got Keycloak admin token\n")
+
+            # Get users from Keycloak
+            users_url = f"{keycloak_url}/admin/realms/{realm}/users"
+            headers = {'Authorization': f'Bearer {token}'}
+
+            response = http_requests.get(users_url, headers=headers, timeout=10)
+
+            if response.status_code != 200:
+                raise Exception(f"Failed to fetch users from Keycloak: {response.status_code}")
+
+            keycloak_users = response.json()
+            output_lines.append(f"Found {len(keycloak_users)} users in Keycloak\n")
+
+            # Sync users to database
+            synced = 0
+            created = 0
+            updated = 0
+            errors = []
+
+            now = datetime.now().isoformat()
+
+            for kc_user in keycloak_users:
+                try:
+                    agent = Agent.query.filter_by(keycloak_id=kc_user['id']).first()
+
+                    if agent:
+                        agent.username = kc_user.get('username', agent.username)
+                        agent.email = kc_user.get('email', agent.email)
+                        agent.first_name = kc_user.get('firstName', '')
+                        agent.last_name = kc_user.get('lastName', '')
+                        agent.enabled = kc_user.get('enabled', True)
+                        agent.updated_at = now
+                        agent.last_synced_at = now
+                        updated += 1
+                    else:
+                        agent = Agent(
+                            keycloak_id=kc_user['id'],
+                            username=kc_user.get('username', ''),
+                            email=kc_user.get('email', ''),
+                            first_name=kc_user.get('firstName', ''),
+                            last_name=kc_user.get('lastName', ''),
+                            enabled=kc_user.get('enabled', True),
+                            theme_preference='light',
+                            created_at=now,
+                            updated_at=now,
+                            last_synced_at=now
+                        )
+                        db.session.add(agent)
+                        created += 1
+
+                    synced += 1
+                except Exception as e:
+                    errors.append(f"Error syncing {kc_user.get('username')}: {str(e)}")
+
+            db.session.commit()
+
+            output_lines.append(f"\nSync complete:\n")
+            output_lines.append(f"  Synced: {synced}\n")
+            output_lines.append(f"  Created: {created}\n")
+            output_lines.append(f"  Updated: {updated}\n")
+
+            if errors:
+                output_lines.append(f"\nErrors ({len(errors)}):\n")
+                for err in errors:
+                    output_lines.append(f"  - {err}\n")
+
+            # Update job status
+            job = db.session.get(SyncJob, job_id)
+            if job:
+                job.status = 'completed'
+                job.completed_at = datetime.now().isoformat()
+                job.output = ''.join(output_lines)
+                job.success = len(errors) == 0
+                db.session.commit()
+
+        except Exception as e:
+            job = db.session.get(SyncJob, job_id)
+            if job:
+                job.status = 'failed'
+                job.completed_at = datetime.now().isoformat()
+                job.error = str(e)
+                job.success = False
+                db.session.commit()
+
+    try:
+        job_id = str(uuid.uuid4())
+
+        # Create job entry in database
+        job = SyncJob(
+            id=job_id,
+            script='keycloak_agents',
+            status='running',
+            started_at=datetime.now().isoformat()
+        )
+        db.session.add(job)
+        db.session.commit()
+
+        # Start background thread
+        thread = threading.Thread(target=run_agent_sync, args=(job_id,))
+        thread.daemon = True
+        thread.start()
+
+        return jsonify({
+            'success': True,
+            'job_id': job_id,
+            'message': 'Keycloak agent sync started in background'
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
 @app.route('/sync/last/<script_name>', methods=['GET'])
 @token_required
 def get_last_sync(script_name):

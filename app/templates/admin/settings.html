@@ -723,36 +723,13 @@ sync_run_on_startup = false</code></pre>
             );
         }
 
-        async function syncAgents() {
-            const btn = document.getElementById('sync-agents-btn');
-            const originalText = 'Sync Keycloak Agents';
-
-            btn.disabled = true;
-            btn.innerHTML = '<span class="btn__label"><i data-lucide="loader" class="btn__icon"></i> Syncing...</span>';
-            lucide.createIcons();
-
-            try {
-                const basePath = window.location.pathname.startsWith('/codex/') ? '/codex' : '';
-                const response = await fetch(`${basePath}/api/agents/sync`, {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    credentials: 'same-origin'
-                });
-
-                const result = await response.json();
-
-                if (result.success) {
-                    alert(`Keycloak Agent Sync Complete!\n\nSynced: ${result.synced}\nCreated: ${result.created}\nUpdated: ${result.updated}`);
-                } else {
-                    alert('Sync failed: ' + (result.error || 'Unknown error'));
-                }
-            } catch (error) {
-                alert('Error: ' + error.message);
-            } finally {
-                btn.disabled = false;
-                btn.innerHTML = '<span class="btn__label"><i data-lucide="users-2" class="btn__icon"></i> ' + originalText + '</span>';
-                lucide.createIcons();
-            }
+        function syncAgents() {
+            startSync(
+                '{{ url_for("sync_keycloak_agents") }}',
+                'sync-agents-btn',
+                'Sync Keycloak Agents',
+                'Keycloak Agents'
+            );
         }
 
         // Update elapsed time every second
