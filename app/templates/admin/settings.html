@@ -54,19 +54,19 @@
                     <button class="btn btn--primary" onclick="syncTickets()" id="sync-tickets-btn">
                         <span class="btn__label">
                             <i data-lucide="ticket" class="btn__icon"></i>
-                            Sync Tickets
+                            Sync Freshservice Tickets
                         </span>
                     </button>
                     <button class="btn btn--primary" onclick="syncTicketsFullHistory()" id="sync-tickets-history-btn">
                         <span class="btn__label">
                             <i data-lucide="history" class="btn__icon"></i>
-                            Full History (2yr)
+                            Freshservice History (2yr)
                         </span>
                     </button>
                     <button class="btn btn--primary" onclick="syncAgents()" id="sync-agents-btn">
                         <span class="btn__label">
                             <i data-lucide="users-2" class="btn__icon"></i>
-                            Sync Agents
+                            Sync Keycloak Agents
                         </span>
                     </button>
                 </div>
@@ -688,20 +688,20 @@ sync_run_on_startup = false</code></pre>
             startSync(
                 '{{ url_for("sync_tickets") }}',
                 'sync-tickets-btn',
-                'Sync Tickets',
-                'Tickets'
+                'Sync Freshservice Tickets',
+                'Freshservice Tickets'
             );
         }
 
         function syncTicketsFullHistory() {
-            if (!confirm('This will sync 2 years of ticket history. This may take a long time. Continue?')) {
+            if (!confirm('This will sync 2 years of Freshservice ticket history. This may take a long time. Continue?')) {
                 return;
             }
             startSync(
                 '{{ url_for("sync_tickets_full_history") }}',
                 'sync-tickets-history-btn',
-                'Full History (2yr)',
-                'Tickets Full History'
+                'Freshservice History (2yr)',
+                'Freshservice Tickets Full History'
             );
         }
 
@@ -725,7 +725,7 @@ sync_run_on_startup = false</code></pre>
 
         async function syncAgents() {
             const btn = document.getElementById('sync-agents-btn');
-            const originalText = 'Sync Agents';
+            const originalText = 'Sync Keycloak Agents';
 
             btn.disabled = true;
             btn.innerHTML = '<span class="btn__label"><i data-lucide="loader" class="btn__icon"></i> Syncing...</span>';
@@ -735,13 +735,14 @@ sync_run_on_startup = false</code></pre>
                 const basePath = window.location.pathname.startsWith('/codex/') ? '/codex' : '';
                 const response = await fetch(`${basePath}/api/agents/sync`, {
                     method: 'POST',
-                    headers: {'Content-Type': 'application/json'}
+                    headers: {'Content-Type': 'application/json'},
+                    credentials: 'same-origin'
                 });
 
                 const result = await response.json();
 
                 if (result.success) {
-                    alert(`Agent Sync Complete!\n\nSynced: ${result.synced}\nCreated: ${result.created}\nUpdated: ${result.updated}`);
+                    alert(`Keycloak Agent Sync Complete!\n\nSynced: ${result.synced}\nCreated: ${result.created}\nUpdated: ${result.updated}`);
                 } else {
                     alert('Sync failed: ' + (result.error || 'Unknown error'));
                 }
