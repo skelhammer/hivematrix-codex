@@ -272,6 +272,16 @@ class TicketDetail(db.Model):
     conversations = db.Column(db.Text)  # JSON array of conversation entries
     notes = db.Column(db.Text)  # JSON array of internal notes
 
+    # Composite indexes for common query patterns
+    __table_args__ = (
+        db.Index('idx_ticket_company', 'company_account_number'),
+        db.Index('idx_ticket_status', 'status_id'),
+        db.Index('idx_ticket_priority', 'priority_id'),
+        db.Index('idx_ticket_updated', 'last_updated_at'),
+        db.Index('idx_ticket_responder', 'responder_id'),
+        db.Index('idx_ticket_group', 'group_id'),
+    )
+
 class SyncJob(db.Model):
     __tablename__ = 'sync_jobs'
     id = db.Column(db.String(50), primary_key=True)  # UUID
