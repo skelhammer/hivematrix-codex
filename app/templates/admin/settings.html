@@ -260,10 +260,17 @@
             <h3>Update Freshservice Configuration</h3>
             <form method="POST" action="{{ url_for('admin.update_freshservice') }}" class="form">
                 <div class="form__group">
-                    <label for="fs_domain" class="form__label">Domain:</label>
+                    <label for="fs_domain" class="form__label">API Domain:</label>
                     <input type="text" id="fs_domain" name="fs_domain"
                            value="{{ fs_config.domain }}"
                            placeholder="your-domain.freshservice.com"
+                           class="form__input">
+                </div>
+                <div class="form__group">
+                    <label for="fs_web_domain" class="form__label">Web Domain (for ticket links):</label>
+                    <input type="text" id="fs_web_domain" name="fs_web_domain"
+                           value="{{ fs_config.web_domain }}"
+                           placeholder="helpdesk.yourdomain.com (leave blank to use API domain)"
                            class="form__input">
                 </div>
                 <div class="form__group">

@@ -28,6 +28,7 @@ def settings():
     # Get configuration values
     fs_config = {
         'domain': config.get('freshservice', 'domain', fallback='Not configured'),
+        'web_domain': config.get('freshservice', 'web_domain', fallback=''),
         'api_key_set': bool(config.get('freshservice', 'api_key', fallback='') and
                            config.get('freshservice', 'api_key') not in ['', 'YOUR_FRESHSERVICE_API_KEY'])
     }
@@ -92,10 +93,13 @@ def update_freshservice():
     config.read(config_path)
     
     domain = request.form.get('fs_domain')
+    web_domain = request.form.get('fs_web_domain')
     api_key = request.form.get('fs_api_key')
-    
+
     if domain:
         config.set('freshservice', 'domain', domain)
+    if web_domain is not None:
+        config.set('freshservice', 'web_domain', web_domain)
     if api_key:
         config.set('freshservice', 'api_key', api_key)
     
