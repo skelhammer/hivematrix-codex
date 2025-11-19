@@ -11,6 +11,11 @@ app.config['TEMPLATES_AUTO_RELOAD'] = True
 # Set secret key for sessions (generate a random one if not set)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY') or secrets.token_hex(32)
 
+# Configure logging level from environment
+import logging
+log_level = os.environ.get('LOG_LEVEL', 'INFO').upper()
+app.logger.setLevel(getattr(logging, log_level, logging.INFO))
+
 # --- Explicitly load all required configuration from environment variables ---
 # Provide sensible defaults for init_db.py, will be overridden by Helm's .flaskenv
 app.config['CORE_SERVICE_URL'] = os.environ.get('CORE_SERVICE_URL', 'http://localhost:5000')

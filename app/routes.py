@@ -73,7 +73,7 @@ def run_sync_script(job_id, script_path, extra_args=None, follow_up_script=None)
                         job.output = (job.output or '') + follow_output
                         db.session.commit()
                     except Exception as e:
-                        print(f"Follow-up script failed: {e}")
+                        app.logger.error(f"Follow-up script failed: {e}")
 
     except subprocess.TimeoutExpired:
         with app.app_context():
