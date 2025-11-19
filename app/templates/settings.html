@@ -68,6 +68,27 @@
 
             <div class="section-divider"></div>
 
+            <!-- Home Page Settings Section -->
+            <div class="u-mb-2">
+                <h2>Home Page</h2>
+                <p class="u-text-secondary u-mb-1">
+                    Choose which page opens when you log in to HiveMatrix.
+                </p>
+
+                <div class="form-group">
+                    <label for="home-page-select" class="form-group__label">Default Home Page:</label>
+                    <select id="home-page-select" class="form-group__select" onchange="markUnsaved()">
+                        <option value="helm">Helm (Dashboard)</option>
+                        <option value="codex">Codex (Data Management)</option>
+                        <option value="beacon">Beacon (Ticket Dashboard)</option>
+                        <option value="ledger">Ledger (Billing)</option>
+                        <option value="brainhair">Brainhair (AI Assistant)</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="section-divider"></div>
+
             <!-- Save Button -->
             <div class="action-footer">
                 <button class="btn btn--primary" onclick="saveSettings()" id="save-btn">
@@ -84,6 +105,8 @@
     <script>
         let currentTheme = 'light';
         let savedTheme = 'light';
+        let currentHomePage = 'helm';
+        let savedHomePage = 'helm';
 
         function getBasePath() {
             const path = window.location.pathname;
@@ -107,6 +130,10 @@
                     currentTheme = data.theme_preference || 'light';
                     savedTheme = currentTheme;
                     selectTheme(currentTheme, false);
+
+                    currentHomePage = data.home_page_preference || 'helm';
+                    savedHomePage = currentHomePage;
+                    document.getElementById('home-page-select').value = currentHomePage;
                 } else {
                     // User not synced yet
                     document.getElementById('user-username').textContent = 'Not synced';
@@ -134,6 +161,15 @@
             }
         }
 
+        function markUnsaved() {
+            currentHomePage = document.getElementById('home-page-select').value;
+            if (currentHomePage !== savedHomePage || currentTheme !== savedTheme) {
+                document.getElementById('save-status').innerHTML = '<span class="u-text-warning">Unsaved changes</span>';
+            } else {
+                document.getElementById('save-status').textContent = '';
+            }
+        }
+
         async function saveSettings() {
             const saveBtn = document.getElementById('save-btn');
             const saveStatus = document.getElementById('save-status');
@@ -145,11 +181,13 @@
 
             try {
                 const basePath = getBasePath();
+                currentHomePage = document.getElementById('home-page-select').value;
                 const response = await fetch(`${basePath}/api/my/settings`, {
                     method: 'PUT',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({
-                        theme_preference: currentTheme
+                        theme_preference: currentTheme,
+                        home_page_preference: currentHomePage
                     }),
                     credentials: 'same-origin'
                 });
@@ -158,7 +196,8 @@
 
                 if (response.ok && result.success) {
                     savedTheme = currentTheme;
-                    saveStatus.innerHTML = '<span class="u-text-success">✓ Settings saved! Theme will apply across all HiveMatrix services.</span>';
+                    savedHomePage = currentHomePage;
+                    saveStatus.innerHTML = '<span class="u-text-success">✓ Settings saved!</span>';
 
                     // Reload page after 1 second to apply theme globally
                     setTimeout(() => {

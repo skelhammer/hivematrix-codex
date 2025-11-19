@@ -242,12 +242,14 @@ def get_my_settings():
         return jsonify({
             'theme_preference': 'light',
             'knowledgetree_view_preference': 'grid',
+            'home_page_preference': 'helm',
             'synced': False
         })
 
     return jsonify({
         'theme_preference': agent.theme_preference,
         'knowledgetree_view_preference': agent.knowledgetree_view_preference,
+        'home_page_preference': agent.home_page_preference or 'helm',
         'username': agent.username,
         'email': agent.email,
         'synced': True
@@ -292,6 +294,14 @@ def update_my_settings():
             return {'error': 'Invalid view preference. Must be "grid", "tree", or "hierarchy"'}, 400
         agent.knowledgetree_view_preference = view
 
+    # Update home page preference
+    if 'home_page_preference' in data:
+        home_page = data['home_page_preference']
+        valid_pages = ['helm', 'codex', 'beacon', 'ledger', 'brainhair']
+        if home_page not in valid_pages:
+            return {'error': f'Invalid home page. Must be one of: {", ".join(valid_pages)}'}, 400
+        agent.home_page_preference = home_page
+
     agent.updated_at = datetime.utcnow().isoformat()
 
     try:
@@ -335,6 +345,34 @@ def get_user_theme():
 
     return jsonify({
         'theme': agent.theme_preference,
+        'source': 'codex',
+        'email': agent.email
+    })
+
+
+@app.route('/api/public/user/home-page', methods=['GET'])
+@token_required
+def get_user_home_page():
+    """
+    Get user's home page preference.
+    This endpoint is called by Nexus to determine where to redirect after login.
+    Requires service token authentication.
+    """
+    # Get email from query params
+    user_email = request.args.get('email')
+
+    if not user_email:
+        # Default to helm if no user email
+        return jsonify({'home_page': 'helm', 'source': 'default'})
+
+    agent = Agent.query.filter_by(email=user_email).first()
+
+    if not agent:
+        # Agent not synced yet, return default
+        return jsonify({'home_page': 'helm', 'source': 'default'})
+
+    return jsonify({
+        'home_page': agent.home_page_preference or 'helm',
         'source': 'codex',
         'email': agent.email
     })

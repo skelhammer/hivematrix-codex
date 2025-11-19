@@ -383,6 +383,7 @@ class Agent(db.Model):
     # User settings - stored in Codex, not Keycloak
     theme_preference = db.Column(db.String(20), default='light')  # 'light' or 'dark'
     knowledgetree_view_preference = db.Column(db.String(20), default='grid')  # 'grid', 'tree', or 'hierarchy'
+    home_page_preference = db.Column(db.String(50), default='helm')  # Service slug for home page
 
     # Metadata
     created_at = db.Column(db.String(100))  # ISO timestamp
@@ -400,6 +401,7 @@ class Agent(db.Model):
             'enabled': self.enabled,
             'theme_preference': self.theme_preference,
             'knowledgetree_view_preference': self.knowledgetree_view_preference,
+            'home_page_preference': self.home_page_preference,
             'created_at': self.created_at,
             'updated_at': self.updated_at,
             'last_synced_at': self.last_synced_at
