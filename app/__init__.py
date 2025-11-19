@@ -39,6 +39,14 @@ app.config['SQLALCHEMY_DATABASE_URI'] = config.get('database', 'connection_strin
     fallback=f"sqlite:///{os.path.join(app.instance_path, 'codex.db')}")
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
+# Connection pool configuration for better performance
+app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
+    'pool_size': 10,
+    'pool_recycle': 3600,  # Recycle connections after 1 hour
+    'pool_pre_ping': True,  # Test connections before use
+    'max_overflow': 5,
+}
+
 # Scheduler configuration
 app.config['SYNC_FRESHSERVICE_ENABLED'] = config.getboolean('scheduler', 'sync_freshservice_enabled', fallback=True)
 app.config['SYNC_DATTO_ENABLED'] = config.getboolean('scheduler', 'sync_datto_enabled', fallback=True)
