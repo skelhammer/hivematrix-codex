@@ -80,7 +80,7 @@
                     <button class="btn btn--primary" onclick="createAccountNumbers()" id="create-acct-btn">
                         <span class="btn__label">
                             <i data-lucide="hash" class="btn__icon"></i>
-                            Create Account Numbers
+                            Create Account Numbers & Push to Freshservice
                         </span>
                     </button>
                     <button class="btn btn--primary" onclick="pushToDatto()" id="push-datto-btn">
@@ -709,7 +709,7 @@ sync_run_on_startup = false</code></pre>
             startSync(
                 '{{ url_for("sync_create_account_numbers") }}',
                 'create-acct-btn',
-                'Create Account Numbers',
+                'Create Account Numbers & Push to Freshservice',
                 'Account Numbers'
             );
         }
