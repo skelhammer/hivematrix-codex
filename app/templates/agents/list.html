@@ -50,6 +50,27 @@
         </div>
     </div>
 
+    <div class="card u-mt-3">
+        <div class="card__header">
+            <h2 class="card__title">Freshservice Agents</h2>
+        </div>
+        <div class="card__body">
+            <p class="u-text-secondary u-mb-2">Technicians synced from Freshservice (used for ticket agent name lookups in Beacon)</p>
+
+            <!-- Results Info -->
+            <div class="results-header">
+                <p class="results-header__count">
+                    Total: <strong id="fs-agent-count">Loading...</strong> agents
+                </p>
+            </div>
+
+            <!-- Freshservice Agents Table -->
+            <div id="fs-agent-list">
+                <p>Loading Freshservice agents...</p>
+            </div>
+        </div>
+    </div>
+
     <div id="createAgentModal" class="modal">
         <div class="modal__dialog">
             <div class="modal__header">
@@ -684,9 +705,62 @@
             }
         });
 
+        async function loadFreshserviceAgents() {
+            try {
+                const basePath = getBasePath();
+                const response = await fetch(`${basePath}/api/freshservice/agents`, {
+                    credentials: 'same-origin'
+                });
+                const agents = await response.json();
+
+                displayFreshserviceAgents(agents);
+                document.getElementById('fs-agent-count').textContent = agents.length;
+            } catch (error) {
+                document.getElementById('fs-agent-list').innerHTML = `<p class="alert alert--error">Error loading Freshservice agents: ${error.message}</p>`;
+                document.getElementById('fs-agent-count').textContent = '0';
+            }
+        }
+
+        function displayFreshserviceAgents(agents) {
+            const container = document.getElementById('fs-agent-list');
+
+            if (!agents || agents.length === 0) {
+                container.innerHTML = '<p class="empty-state">No Freshservice agents found. Run "Sync Freshservice" from Admin Settings to import agents.</p>';
+                return;
+            }
+
+            let html = `
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Name</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+
+            agents.forEach(agent => {
+                html += `
+                    <tr>
+                        <td>${agent.id}</td>
+                        <td>${agent.name}</td>
+                    </tr>
+                `;
+            });
+
+            html += `
+                    </tbody>
+                </table>
+            `;
+
+            container.innerHTML = html;
+        }
+
         // Load agents on page load
         window.addEventListener('DOMContentLoaded', () => {
             loadAgents();
+            loadFreshserviceAgents();
             lucide.createIcons();
         });
     </script>
