@@ -927,7 +927,7 @@ def api_active_tickets():
             if dt_str.endswith('Z'):
                 dt_str = dt_str[:-1] + '+00:00'
             return datetime.fromisoformat(dt_str)
-        except:
+        except (ValueError, TypeError):
             return None
 
     def time_since(dt_obj):

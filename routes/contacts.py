@@ -139,7 +139,7 @@ def contact_details(contact_id):
                 secondary_emails_display = ', '.join(emails_array)
             else:
                 secondary_emails_display = contact.secondary_emails
-        except:
+        except (json.JSONDecodeError, ValueError, TypeError):
             secondary_emails_display = contact.secondary_emails
 
     # Get all companies for dropdown
