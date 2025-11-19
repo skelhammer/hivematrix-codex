@@ -1210,11 +1210,12 @@ def api_get_freshservice_domain():
         return jsonify({'value': 'freshservice.com', 'error': str(e)})
 
 
-@app.route('/api/agents', methods=['GET'])
+@app.route('/api/freshservice/agents', methods=['GET'])
 @token_required
-def api_get_agents():
+def api_get_freshservice_agents():
     """
-    Get list of Freshservice agents from database.
+    Get list of Freshservice agents (technicians) from database.
+    Used by Beacon for ticket agent name lookups.
 
     Returns list of agents with id and name.
     """
