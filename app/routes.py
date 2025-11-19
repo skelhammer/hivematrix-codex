@@ -1357,7 +1357,12 @@ def health_check():
 @app.route('/api/config/freshservice_domain', methods=['GET'])
 @token_required
 def api_get_freshservice_domain():
-    """Get Freshservice domain from Codex configuration."""
+    """Get Freshservice web domain for ticket links from Codex configuration.
+
+    Returns web_domain if configured, otherwise falls back to domain.
+    This allows API calls to use one domain while ticket links use another
+    (e.g., custom domain like helpdesk.example.com).
+    """
     import configparser
     import os
 
@@ -1366,8 +1371,11 @@ def api_get_freshservice_domain():
     try:
         config = configparser.ConfigParser()
         config.read(config_file)
-        domain = config.get('freshservice', 'domain', fallback='freshservice.com')
-        return jsonify({'value': domain})
+        # Use web_domain for ticket links if configured, otherwise fall back to domain
+        web_domain = config.get('freshservice', 'web_domain', fallback=None)
+        if not web_domain:
+            web_domain = config.get('freshservice', 'domain', fallback='freshservice.com')
+        return jsonify({'value': web_domain})
     except Exception as e:
         return jsonify({'value': 'freshservice.com', 'error': str(e)})
 
