@@ -28,7 +28,7 @@ def run_sync_script(script_name):
     Run a sync script as a background subprocess with SyncJob tracking.
 
     Args:
-        script_name: Name of the script (e.g., 'pull_freshservice.py')
+        script_name: Name of the script (e.g., 'sync_psa.py')
     """
     global _app
 
@@ -132,46 +132,110 @@ def run_sync_script(script_name):
                     db.session.commit()
 
 
-def run_freshservice_sync():
+def run_psa_sync(provider: str, sync_type: str = 'all', full_history: bool = False):
     """
-    Run Freshservice sync with account number assignment first.
+    Run PSA sync using the unified sync_psa.py script.
 
-    This ensures all companies have account numbers before syncing.
+    Args:
+        provider: PSA provider name ('freshservice', 'superops')
+        sync_type: Type of sync ('companies', 'contacts', 'agents', 'tickets', 'all')
+        full_history: For tickets, fetch all history
     """
+    global _app
+
     try:
         base_dir = os.path.dirname(os.path.dirname(__file__))
+        script_path = os.path.join(base_dir, 'sync_psa.py')
         python_path = os.path.join(base_dir, 'pyenv', 'bin', 'python')
 
         if not os.path.exists(python_path):
             python_path = 'python3'
 
-        logger.info("Running Freshservice sync workflow")
+        logger.info(f"Running PSA sync: provider={provider}, type={sync_type}")
 
-        # Step 1: Assign account numbers to companies missing them
-        logger.info("Step 1: Assigning account numbers to Freshservice companies")
-        set_account_script = os.path.join(base_dir, 'set_account_numbers.py')
+        # Build command
+        cmd = [python_path, script_path, '--provider', provider, '--type', sync_type]
+        if full_history:
+            cmd.append('--full-history')
 
+        job_id = None
+
+        # Create SyncJob record
+        if _app is not None:
+            from models import SyncJob
+            from extensions import db
+
+            with _app.app_context():
+                job_id = str(uuid.uuid4())
+                job = SyncJob(
+                    id=job_id,
+                    script='psa',
+                    provider=provider,
+                    sync_type=sync_type,
+                    status='running',
+                    started_at=datetime.now(timezone.utc).isoformat()
+                )
+                db.session.add(job)
+                db.session.commit()
+                logger.info(f"Created SyncJob {job_id} for {provider} {sync_type}")
+
+        # Run sync
         result = subprocess.run(
-            [python_path, set_account_script],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            cwd=base_dir,
-            timeout=300  # 5 minute timeout
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=7200,  # 2 hour timeout
+            cwd=base_dir
         )
 
-        if result.returncode == 0:
-            logger.info("Account numbers assigned successfully")
-        else:
-            logger.warning(f"Account number assignment had issues: {result.stderr.decode()}")
+        # Update SyncJob with result
+        if _app is not None and job_id:
+            from models import SyncJob
+            from extensions import db
 
-        # Step 2: Pull Freshservice data
-        logger.info("Step 2: Pulling Freshservice data")
-        run_sync_script('pull_freshservice.py')
+            with _app.app_context():
+                job = db.session.get(SyncJob, job_id)
+                if job:
+                    job.status = 'completed' if result.returncode == 0 else 'failed'
+                    job.success = result.returncode == 0
+                    job.output = result.stdout[-1000:] if result.stdout else None
+                    job.error = result.stderr[-1000:] if result.stderr else None
+                    job.completed_at = datetime.now(timezone.utc).isoformat()
+                    db.session.commit()
+                    logger.info(f"Updated SyncJob {job_id}: {job.status}")
+
+        if result.returncode == 0:
+            logger.info(f"Completed PSA sync: {provider} {sync_type}")
+        else:
+            logger.error(f"PSA sync failed: {provider} {sync_type} - {result.stderr[:200] if result.stderr else 'No error output'}")
 
     except subprocess.TimeoutExpired:
-        logger.error("set_account_numbers.py timed out after 5 minutes")
+        logger.error(f"PSA sync timed out: {provider} {sync_type}")
+        if _app is not None and job_id:
+            from models import SyncJob
+            from extensions import db
+
+            with _app.app_context():
+                job = db.session.get(SyncJob, job_id)
+                if job:
+                    job.status = 'failed'
+                    job.success = False
+                    job.error = 'Script timed out after 2 hours'
+                    job.completed_at = datetime.now(timezone.utc).isoformat()
+                    db.session.commit()
+
     except Exception as e:
-        logger.error(f"Error in Freshservice sync workflow: {e}")
+        logger.error(f"Error running PSA sync {provider} {sync_type}: {e}")
+
+
+def run_freshservice_sync():
+    """
+    Run Freshservice sync (legacy wrapper).
+
+    Uses the new unified PSA sync system.
+    Syncs companies, contacts, and agents only (not tickets - they have their own schedule).
+    """
+    run_psa_sync('freshservice', 'base')
 
 
 def init_scheduler(app):
@@ -194,34 +258,37 @@ def init_scheduler(app):
 
     with app.app_context():
         # Get schedule settings from config
-        freshservice_enabled = app.config.get('SYNC_FRESHSERVICE_ENABLED', True)
+        psa_enabled = app.config.get('SYNC_PSA_ENABLED', True)
         datto_enabled = app.config.get('SYNC_DATTO_ENABLED', True)
         tickets_enabled = app.config.get('SYNC_TICKETS_ENABLED', True)
 
-        freshservice_schedule = app.config.get('SYNC_FRESHSERVICE_SCHEDULE', 'daily')
+        psa_schedule = app.config.get('SYNC_PSA_SCHEDULE', 'daily')
         datto_schedule = app.config.get('SYNC_DATTO_SCHEDULE', 'daily')
         tickets_schedule = app.config.get('SYNC_TICKETS_SCHEDULE', 'frequent')
 
-        # Schedule Freshservice sync (companies & contacts)
-        if freshservice_enabled:
-            if freshservice_schedule == 'daily':
+        # Get default PSA provider name for logging
+        psa_provider = app.config.get('PSA_DEFAULT_PROVIDER', 'freshservice').title()
+
+        # Schedule PSA sync (companies & contacts)
+        if psa_enabled:
+            if psa_schedule == 'daily':
                 scheduler.add_job(
                     func=run_freshservice_sync,
                     trigger=CronTrigger(hour=2, minute=0),  # 2:00 AM daily
-                    id='freshservice_sync',
-                    name='Sync Freshservice (Companies & Contacts)',
+                    id='psa_sync',
+                    name=f'Sync {psa_provider} (Companies & Contacts)',
                     replace_existing=True
                 )
-                logger.info("Scheduled Freshservice sync: Daily at 2:00 AM")
-            elif freshservice_schedule == 'hourly':
+                logger.info(f"Scheduled {psa_provider} sync: Daily at 2:00 AM")
+            elif psa_schedule == 'hourly':
                 scheduler.add_job(
                     func=run_freshservice_sync,
                     trigger=IntervalTrigger(hours=1),
-                    id='freshservice_sync',
-                    name='Sync Freshservice (Companies & Contacts)',
+                    id='psa_sync',
+                    name=f'Sync {psa_provider} (Companies & Contacts)',
                     replace_existing=True
                 )
-                logger.info("Scheduled Freshservice sync: Every hour")
+                logger.info(f"Scheduled {psa_provider} sync: Every hour")
 
         # Schedule Datto RMM sync (assets & backup)
         if datto_enabled:
@@ -244,46 +311,49 @@ def init_scheduler(app):
                 )
                 logger.info("Scheduled Datto sync: Every hour")
 
-        # Schedule Tickets sync
+        # Schedule Tickets sync (uses PSA provider system)
         if tickets_enabled:
+            # Get default PSA provider for tickets
+            default_provider = app.config.get('PSA_DEFAULT_PROVIDER', 'freshservice')
+
             if tickets_schedule == 'frequent':
                 scheduler.add_job(
-                    func=lambda: run_sync_script('sync_tickets_from_freshservice.py'),
+                    func=lambda: run_psa_sync(default_provider, 'tickets'),
                     trigger=IntervalTrigger(minutes=3),
                     id='tickets_sync',
                     name='Sync Tickets',
                     replace_existing=True
                 )
-                logger.info("Scheduled Tickets sync: Every 3 minutes")
+                logger.info(f"Scheduled Tickets sync ({default_provider}): Every 3 minutes")
             elif tickets_schedule == 'hourly':
                 scheduler.add_job(
-                    func=lambda: run_sync_script('sync_tickets_from_freshservice.py'),
+                    func=lambda: run_psa_sync(default_provider, 'tickets'),
                     trigger=IntervalTrigger(hours=1),
                     id='tickets_sync',
                     name='Sync Tickets',
                     replace_existing=True
                 )
-                logger.info("Scheduled Tickets sync: Every hour")
+                logger.info(f"Scheduled Tickets sync ({default_provider}): Every hour")
             elif tickets_schedule == 'daily':
                 scheduler.add_job(
-                    func=lambda: run_sync_script('sync_tickets_from_freshservice.py'),
+                    func=lambda: run_psa_sync(default_provider, 'tickets'),
                     trigger=CronTrigger(hour=4, minute=0),  # 4:00 AM daily
                     id='tickets_sync',
                     name='Sync Tickets',
                     replace_existing=True
                 )
-                logger.info("Scheduled Tickets sync: Daily at 4:00 AM")
+                logger.info(f"Scheduled Tickets sync ({default_provider}): Daily at 4:00 AM")
 
         # Run initial sync on startup if enabled
         run_on_startup = app.config.get('SYNC_RUN_ON_STARTUP', False)
         if run_on_startup:
             logger.info("Running initial sync on startup...")
-            if freshservice_enabled:
+            if psa_enabled:
                 scheduler.add_job(
                     func=run_freshservice_sync,
                     trigger='date',  # Run once immediately
-                    id='freshservice_startup',
-                    name='Startup Freshservice Sync',
+                    id='psa_startup',
+                    name=f'Startup {psa_provider} Sync',
                     replace_existing=True
                 )
             if datto_enabled:

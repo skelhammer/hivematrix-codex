@@ -53,14 +53,14 @@
                         <label class="form-group__label">First Name</label>
                         <input type="text" class="form-group__input" id="edit-first_name" value="{{ contact.first_name or '' }}">
                         <small class="form-group__help">
-                            <em>(from Freshservice)</em>
+                            <em>(from PSA)</em>
                         </small>
                     </div>
                     <div class="form-group edit-mode" style="display: none;">
                         <label class="form-group__label">Last Name</label>
                         <input type="text" class="form-group__input" id="edit-last_name" value="{{ contact.last_name or '' }}">
                         <small class="form-group__help">
-                            <em>(from Freshservice)</em>
+                            <em>(from PSA)</em>
                         </small>
                     </div>
 
@@ -69,7 +69,7 @@
                         <label class="form-group__label">Email</label>
                         <input type="email" class="form-group__input" id="edit-email" value="{{ contact.email }}">
                         <small class="form-group__help">
-                            <em>(from Freshservice)</em>
+                            <em>(from PSA)</em>
                         </small>
                     </div>
 
@@ -80,7 +80,7 @@
                         <label class="form-group__label">Secondary Emails</label>
                         <input type="text" class="form-group__input" id="edit-secondary_emails" value="{{ secondary_emails_display or '' }}" placeholder="email1@example.com, email2@example.com">
                         <small class="form-group__help">
-                            <em>(from Freshservice - comma separated)</em>
+                            <em>(from PSA - comma separated)</em>
                         </small>
                     </div>
 
@@ -89,7 +89,7 @@
                         <label class="form-group__label">Job Title</label>
                         <input type="text" class="form-group__input" id="edit-job_title" value="{{ contact.title or contact.job_title or '' }}">
                         <small class="form-group__help">
-                            <em>(from Freshservice)</em>
+                            <em>(from PSA)</em>
                         </small>
                     </div>
 
@@ -128,7 +128,7 @@
                         <label class="form-group__label">Mobile Phone</label>
                         <input type="tel" class="form-group__input" id="edit-mobile_phone_number" value="{{ contact.mobile_phone_number or '' }}">
                         <small class="form-group__help">
-                            <em>(from Freshservice)</em>
+                            <em>(from PSA)</em>
                         </small>
                     </div>
 
@@ -137,7 +137,7 @@
                         <label class="form-group__label">Work Phone</label>
                         <input type="tel" class="form-group__input" id="edit-work_phone_number" value="{{ contact.work_phone_number or '' }}">
                         <small class="form-group__help">
-                            <em>(from Freshservice)</em>
+                            <em>(from PSA)</em>
                         </small>
                     </div>
 
@@ -148,7 +148,7 @@
                         <label class="form-group__label">Location Name</label>
                         <input type="text" class="form-group__input" id="edit-location_name" value="{{ contact.location_name or '' }}">
                         <small class="form-group__help">
-                            <em>(from Freshservice)</em>
+                            <em>(from PSA)</em>
                         </small>
                     </div>
 
@@ -169,7 +169,7 @@
                             <option value="UTC" {% if contact.time_zone == 'UTC' %}selected{% endif %}>UTC</option>
                         </select>
                         <small class="form-group__help">
-                            <em>(from Freshservice)</em>
+                            <em>(from PSA)</em>
                         </small>
                     </div>
                 </div>
@@ -208,7 +208,7 @@
                         <label class="form-group__label">Address</label>
                         <textarea class="form-group__input" id="edit-address" rows="3">{{ contact.address or '' }}</textarea>
                         <small class="form-group__help">
-                            <em>(from Freshservice)</em>
+                            <em>(from PSA)</em>
                         </small>
                     </div>
                 </div>

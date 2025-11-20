@@ -4,7 +4,7 @@ Central data repository for companies, contacts, assets, and integrations.
 
 ## Overview
 
-Codex is the "rolodex" of HiveMatrix - it aggregates data from external systems (Freshservice, Datto RMM) and provides a unified API for all company and asset information.
+Codex is the "rolodex" of HiveMatrix - it aggregates data from external systems (PSA systems, Datto RMM) and provides a unified API for all company and asset information.
 
 **Port:** 5010
 
@@ -13,8 +13,8 @@ Codex is the "rolodex" of HiveMatrix - it aggregates data from external systems 
 - **Company Management** - Company profiles with account numbers
 - **Contact Directory** - Employee and contact information
 - **Asset Inventory** - Workstations, servers, VMs, network equipment
-- **Ticket Sync** - Freshservice ticket integration
-- **Agent Management** - Freshservice agent data
+- **Ticket Sync** - PSA ticket integration
+- **Agent Management** - PSA agent data
 - **User Preferences** - Theme and home page settings
 
 ## Tech Stack
@@ -30,21 +30,21 @@ Codex is the "rolodex" of HiveMatrix - it aggregates data from external systems 
 - `GET /api/contacts` - List contacts
 - `GET /api/assets` - List assets
 - `GET /api/tickets/active` - Get active tickets
-- `GET /api/freshservice/agents` - List Freshservice agents
+- `GET /api/psa/agents` - List PSA agents
 - `PUT /api/my/settings` - Update user preferences
 
 ## Integrations
 
-- **Freshservice** - Ticket and agent sync via `pull_freshservice.py`
+- **PSA Systems** - Ticket and agent sync via `sync_psa.py`
 - **Datto RMM** - Asset sync via `pull_datto_rmm.py`
 
 ## Environment Variables
 
 - `CORE_SERVICE_URL` - Core service URL
-- `FRESHSERVICE_API_KEY` - Freshservice API key
-- `FRESHSERVICE_DOMAIN` - Freshservice domain
 - `DATTO_API_KEY` - Datto RMM API key
 - `DATTO_API_SECRET` - Datto RMM API secret
+
+PSA credentials are configured in `instance/codex.conf`
 
 ## Documentation
 

@@ -37,32 +37,60 @@
         </div>
         <div class="card__body">
             <div class="u-mb-2">
-                <h3 class="u-mt-0">External System Sync</h3>
+                <h3 class="u-mt-0">PSA Sync ({{ psa_config.default_provider | title }})</h3>
                 <div class="u-flex u-flex-gap u-flex-wrap">
-                    <button class="btn btn--primary" onclick="syncFreshservice()" id="sync-fs-btn">
+                    <button class="btn btn--primary" onclick="syncPSA()" id="sync-psa-btn">
                         <span class="btn__label">
                             <i data-lucide="clipboard-list" class="btn__icon"></i>
-                            Sync Freshservice
+                            Sync {{ psa_config.default_provider | title }}
                         </span>
                     </button>
+                    <button class="btn btn--primary" onclick="syncTickets()" id="sync-tickets-btn">
+                        <span class="btn__label">
+                            <i data-lucide="ticket" class="btn__icon"></i>
+                            Sync {{ psa_config.default_provider | title }} Tickets
+                        </span>
+                    </button>
+                    <button class="btn btn--primary" onclick="syncTicketsFullHistory()" id="sync-tickets-history-btn">
+                        <span class="btn__label">
+                            <i data-lucide="history" class="btn__icon"></i>
+                            {{ psa_config.default_provider | title }} Full History
+                        </span>
+                    </button>
+                    <button class="btn btn--primary" onclick="createAccountNumbers()" id="create-acct-btn">
+                        <span class="btn__label">
+                            <i data-lucide="hash" class="btn__icon"></i>
+                            Create Account Numbers & Push to PSA
+                        </span>
+                    </button>
+                </div>
+            </div>
+
+            <div class="section-divider"></div>
+
+            <div class="u-my-2">
+                <h3 class="u-mt-0">Datto RMM Sync</h3>
+                <div class="u-flex u-flex-gap u-flex-wrap">
                     <button class="btn btn--primary" onclick="syncDatto()" id="sync-datto-btn">
                         <span class="btn__label">
                             <i data-lucide="monitor" class="btn__icon"></i>
                             Sync Datto RMM
                         </span>
                     </button>
-                    <button class="btn btn--primary" onclick="syncTickets()" id="sync-tickets-btn">
+                    <button class="btn btn--primary" onclick="pushToDatto()" id="push-datto-btn">
                         <span class="btn__label">
-                            <i data-lucide="ticket" class="btn__icon"></i>
-                            Sync Freshservice Tickets
+                            <i data-lucide="upload" class="btn__icon"></i>
+                            Push Account Numbers to Datto RMM
                         </span>
                     </button>
-                    <button class="btn btn--primary" onclick="syncTicketsFullHistory()" id="sync-tickets-history-btn">
-                        <span class="btn__label">
-                            <i data-lucide="history" class="btn__icon"></i>
-                            Freshservice History (All)
-                        </span>
-                    </button>
+                </div>
+            </div>
+
+            <div class="section-divider"></div>
+
+            <div class="u-my-2">
+                <h3 class="u-mt-0">Keycloak</h3>
+                <div class="u-flex u-flex-gap u-flex-wrap">
                     <button class="btn btn--primary" onclick="syncAgents()" id="sync-agents-btn">
                         <span class="btn__label">
                             <i data-lucide="users-2" class="btn__icon"></i>
@@ -72,39 +100,6 @@
                 </div>
             </div>
 
-            <div class="section-divider"></div>
-
-            <div class="u-my-2">
-                <h3 class="u-mt-0">Account Number Management</h3>
-                <div class="u-flex u-flex-gap u-flex-wrap">
-                    <button class="btn btn--primary" onclick="createAccountNumbers()" id="create-acct-btn">
-                        <span class="btn__label">
-                            <i data-lucide="hash" class="btn__icon"></i>
-                            Create Account Numbers & Push to Freshservice
-                        </span>
-                    </button>
-                    <button class="btn btn--primary" onclick="pushToDatto()" id="push-datto-btn">
-                        <span class="btn__label">
-                            <i data-lucide="upload" class="btn__icon"></i>
-                            Push to Datto RMM
-                        </span>
-                    </button>
-                </div>
-            </div>
-
-            <div class="section-divider"></div>
-
-            <div class="u-mt-2">
-                <h3 class="u-mt-0">Recommended Sync Order</h3>
-                <ol class="u-text-small u-text-secondary">
-                    <li>Freshservice (companies & contacts)</li>
-                    <li>Datto RMM (assets & backup data)</li>
-                    <li>Tickets (billing hours)</li>
-                </ol>
-                <p class="u-text-small u-text-secondary u-mt-1">
-                    <em>Note: Ticket sync may take several hours for initial full sync.</em>
-                </p>
-            </div>
         </div>
     </div>
 
@@ -139,15 +134,14 @@
                     {% for job in recent_jobs %}
                     <tr>
                         <td>
-                            <strong>{{ job.script }}</strong>
+                            <strong>{{ job.display_name }}</strong>
                         </td>
                         <td class="u-text-small">
-                            {{ job.started_at[:19].replace('T', ' ') if job.started_at else 'N/A' }}
+                            {{ job.started_at if job.started_at else 'N/A' }}
                         </td>
                         <td class="u-text-small">
-                            {% if job.completed_at and job.started_at %}
-                                {% set duration = (job.completed_at|replace('T', ' ')|replace(':', '')|replace('-', '')|int - job.started_at|replace('T', ' ')|replace(':', '')|replace('-', '')|int) %}
-                                ~{{ (duration // 100) }} min
+                            {% if job.duration %}
+                                {{ job.duration }}
                             {% elif job.status == 'running' %}
                                 In progress...
                             {% else %}
@@ -235,6 +229,43 @@
 
     <div class="card">
         <div class="card__header">
+            <h2 class="card__title">PSA Provider Selection</h2>
+        </div>
+        <div class="card__body">
+            <p>Select which PSA (Professional Services Automation) system Codex should use for syncing tickets, companies, and contacts.</p>
+
+            <form method="POST" action="{{ url_for('admin.update_psa_provider') }}" class="form">
+                <div class="form__group">
+                    <label for="default_provider" class="form__label">Active PSA Provider:</label>
+                    <select id="default_provider" name="default_provider" class="form__select">
+                        <option value="freshservice" {% if psa_config.default_provider == 'freshservice' %}selected{% endif %}>
+                            Freshservice
+                        </option>
+                        <option value="superops" {% if psa_config.default_provider == 'superops' %}selected{% endif %}>
+                            Superops
+                        </option>
+                    </select>
+                </div>
+                <p class="u-text-small u-text-secondary u-mt-1">
+                    <em>Note: Changing the provider requires a Codex restart for scheduler changes to take effect.</em>
+                </p>
+                <button type="submit" class="btn btn--primary u-mt-2">
+                    <span class="btn__label">Set Active Provider</span>
+                </button>
+            </form>
+
+            <div class="u-mt-2">
+                <strong>Current Provider:</strong>
+                <span class="badge badge--{% if psa_config.default_provider == 'freshservice' %}primary{% else %}info{% endif %}">
+                    {{ psa_config.default_provider | title }}
+                </span>
+            </div>
+        </div>
+    </div>
+
+    {% if psa_config.default_provider == 'freshservice' %}
+    <div class="card">
+        <div class="card__header">
             <h2 class="card__title">Freshservice Integration</h2>
         </div>
         <div class="card__body">
@@ -285,6 +316,55 @@
             </form>
         </div>
     </div>
+    {% endif %}
+
+    {% if psa_config.default_provider == 'superops' %}
+    <div class="card">
+        <div class="card__header">
+            <h2 class="card__title">Superops Integration</h2>
+        </div>
+        <div class="card__body">
+            <table>
+                <tbody>
+                    <tr>
+                        <td><strong>API URL:</strong></td>
+                        <td>{{ superops_config.api_url or 'Not configured' }}</td>
+                    </tr>
+                    <tr>
+                        <td><strong>API Key:</strong></td>
+                        <td>
+                            {% if superops_config.api_key_set %}
+                                <span class="status-text status-text--success">Configured</span>
+                            {% else %}
+                                <span class="status-text status-text--danger">Not configured</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3>Update Superops Configuration</h3>
+            <form method="POST" action="{{ url_for('admin.update_superops') }}" class="form">
+                <div class="form__group">
+                    <label for="superops_api_url" class="form__label">API URL:</label>
+                    <input type="text" id="superops_api_url" name="superops_api_url"
+                           value="{{ superops_config.api_url }}"
+                           placeholder="https://api.superops.ai/v1"
+                           class="form__input">
+                </div>
+                <div class="form__group">
+                    <label for="superops_api_key" class="form__label">API Key:</label>
+                    <input type="password" id="superops_api_key" name="superops_api_key"
+                           placeholder="Enter new API key (leave blank to keep current)"
+                           class="form__input">
+                </div>
+                <button type="submit" class="btn btn--primary u-mt-2">
+                    <span class="btn__label">Save Superops Settings</span>
+                </button>
+            </form>
+        </div>
+    </div>
+    {% endif %}
 
     <div class="card">
         <div class="card__header">
@@ -367,10 +447,10 @@
 
             <div class="info-grid">
                 <div class="info-item">
-                    <span class="info-item__label">Freshservice Sync:</span>
+                    <span class="info-item__label">PSA Sync ({{ scheduler_config.default_provider | title }}):</span>
                     <span class="info-item__value">
-                        {% if scheduler_config.freshservice_enabled %}
-                            <span class="badge badge--success">Enabled</span> ({{ scheduler_config.freshservice_schedule }})
+                        {% if scheduler_config.psa_enabled %}
+                            <span class="badge badge--success">Enabled</span> ({{ scheduler_config.psa_schedule }})
                         {% else %}
                             <span class="badge badge--danger">Disabled</span>
                         {% endif %}
@@ -434,11 +514,14 @@
 
             <h3>Modify Scheduler Settings</h3>
             <p>To change scheduler settings, edit <code>instance/codex.conf</code> and restart Codex:</p>
-            <pre><code>[scheduler]
-sync_freshservice_enabled = true
+            <pre><code>[psa]
+default_provider = freshservice  # or superops
+
+[scheduler]
+sync_psa_enabled = true
 sync_datto_enabled = true
 sync_tickets_enabled = true
-sync_freshservice_schedule = daily  # daily or hourly
+sync_psa_schedule = daily  # daily or hourly
 sync_datto_schedule = daily
 sync_tickets_schedule = frequent    # frequent (3 min), hourly, or daily
 sync_run_on_startup = false</code></pre>
@@ -673,12 +756,12 @@ sync_run_on_startup = false</code></pre>
             });
         }
 
-        function syncFreshservice() {
+        function syncPSA() {
             startSync(
-                '{{ url_for("sync_freshservice") }}',
-                'sync-fs-btn',
-                'Sync Freshservice',
-                'Freshservice'
+                '{{ url_for("sync_psa") }}',
+                'sync-psa-btn',
+                'Sync {{ psa_config.default_provider | title }}',
+                '{{ psa_config.default_provider | title }}'
             );
         }
 
@@ -695,20 +778,20 @@ sync_run_on_startup = false</code></pre>
             startSync(
                 '{{ url_for("sync_tickets") }}',
                 'sync-tickets-btn',
-                'Sync Freshservice Tickets',
-                'Freshservice Tickets'
+                'Sync {{ psa_config.default_provider | title }} Tickets',
+                '{{ psa_config.default_provider | title }} Tickets'
             );
         }
 
         function syncTicketsFullHistory() {
-            if (!confirm('This will sync ALL Freshservice ticket history. This may take a long time. Continue?')) {
+            if (!confirm('This will sync ALL {{ psa_config.default_provider | title }} ticket history. This may take a long time. Continue?')) {
                 return;
             }
             startSync(
                 '{{ url_for("sync_tickets_full_history") }}',
                 'sync-tickets-history-btn',
-                'Freshservice History (All)',
-                'Freshservice Tickets Full History'
+                '{{ psa_config.default_provider | title }} Full History',
+                '{{ psa_config.default_provider | title }} Tickets Full History'
             );
         }
 
@@ -716,7 +799,7 @@ sync_run_on_startup = false</code></pre>
             startSync(
                 '{{ url_for("sync_create_account_numbers") }}',
                 'create-acct-btn',
-                'Create Account Numbers & Push to Freshservice',
+                'Create Account Numbers & Push to PSA',
                 'Account Numbers'
             );
         }
@@ -725,7 +808,7 @@ sync_run_on_startup = false</code></pre>
             startSync(
                 '{{ url_for("sync_push_to_datto") }}',
                 'push-datto-btn',
-                'Push to Datto RMM',
+                'Push Account Numbers to Datto RMM',
                 'Push to Datto'
             );
         }

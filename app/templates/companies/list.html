@@ -167,7 +167,7 @@
                                 {% if search_query %}
                                     No companies found matching "{{ search_query }}". Try a different search term.
                                 {% else %}
-                                    No companies found. Run Freshservice sync to import data.
+                                    No companies found. Run PSA sync to import data.
                                 {% endif %}
                             </td>
                         </tr>
@@ -349,7 +349,7 @@
                         <td colspan="7" class="empty-state">
                             ${currentSearch ?
                                 `No companies found matching "${currentSearch}". Try a different search term.` :
-                                'No companies found. Run Freshservice sync to import data.'}
+                                'No companies found. Run PSA sync to import data.'}
                         </td>
                     </tr>
                 `;

@@ -63,7 +63,7 @@
                         <label class="form-group__label">Company Name</label>
                         <input type="text" class="form-group__input" id="edit-name" value="{{ company.name }}">
                         <small class="form-group__help">
-                            <em>(synced from Freshservice)</em>
+                            <em>(synced from PSA)</em>
                         </small>
                     </div>
 
@@ -82,7 +82,7 @@
                             {% endfor %}
                         </select>
                         <small class="form-group__help">
-                            <em>(from Freshservice: {{ company.billing_plan or company.plan_selected or 'Not Set' }})</em>
+                            <em>(from PSA: {{ company.billing_plan or company.plan_selected or 'Not Set' }})</em>
                         </small>
                     </div>
 
@@ -106,7 +106,7 @@
                         <label class="form-group__label">Managed Users</label>
                         <input type="number" class="form-group__input" id="edit-managed_users" value="{{ company.managed_users or '' }}">
                         <small class="form-group__help">
-                            <em>(from Freshservice: {{ company.managed_users or 'Not Set' }})</em>
+                            <em>(from PSA: {{ company.managed_users or 'Not Set' }})</em>
                         </small>
                     </div>
 
@@ -116,7 +116,7 @@
                         <label class="form-group__label">Managed Devices</label>
                         <input type="number" class="form-group__input" id="edit-managed_devices" value="{{ company.managed_devices or '' }}">
                         <small class="form-group__help">
-                            <em>(from Freshservice: {{ company.managed_devices or 'Not Set' }})</em>
+                            <em>(from PSA: {{ company.managed_devices or 'Not Set' }})</em>
                         </small>
                     </div>
 
@@ -126,7 +126,7 @@
                         <label class="form-group__label">Managed Network Devices</label>
                         <input type="number" class="form-group__input" id="edit-managed_network" value="{{ company.managed_network or '' }}">
                         <small class="form-group__help">
-                            <em>(from Freshservice: {{ company.managed_network or 'Not Set' }})</em>
+                            <em>(from PSA: {{ company.managed_network or 'Not Set' }})</em>
                         </small>
                     </div>
 
@@ -170,11 +170,11 @@
                         <select class="form-group__input" id="edit-head_user_id">
                             <option value="">Not Set</option>
                             {% for contact in company.contacts %}
-                            <option value="{{ contact.freshservice_id }}" {% if contact.freshservice_id == company.head_user_id %}selected{% endif %}>{{ contact.name }}</option>
+                            <option value="{{ contact.external_id }}" {% if contact.external_id == company.head_user_id %}selected{% endif %}>{{ contact.name }}</option>
                             {% endfor %}
                         </select>
                         <small class="form-group__help">
-                            <em>(from Freshservice: {{ company.head_name or 'Not Set' }})</em>
+                            <em>(from PSA: {{ company.head_name or 'Not Set' }})</em>
                         </small>
                     </div>
 
@@ -185,11 +185,11 @@
                         <select class="form-group__input" id="edit-prime_user_id">
                             <option value="">Not Set</option>
                             {% for contact in company.contacts %}
-                            <option value="{{ contact.freshservice_id }}" {% if contact.freshservice_id == company.prime_user_id %}selected{% endif %}>{{ contact.name }}</option>
+                            <option value="{{ contact.external_id }}" {% if contact.external_id == company.prime_user_id %}selected{% endif %}>{{ contact.name }}</option>
                             {% endfor %}
                         </select>
                         <small class="form-group__help">
-                            <em>(from Freshservice: {{ company.prime_user_name or 'Not Set' }})</em>
+                            <em>(from PSA: {{ company.prime_user_name or 'Not Set' }})</em>
                         </small>
                     </div>
 
@@ -222,7 +222,7 @@
                         <label class="form-group__label">Company Start Date</label>
                         <input type="date" class="form-group__input" id="edit-company_start_date" value="{% if company.company_start_date %}{{ company.company_start_date.split('T')[0] if 'T' in company.company_start_date else company.company_start_date }}{% endif %}">
                         <small class="form-group__help">
-                            <em>(from Freshservice)</em>
+                            <em>(from PSA)</em>
                         </small>
                     </div>
 
@@ -248,7 +248,7 @@
                         <textarea class="form-group__input" id="edit-domains" rows="2" placeholder="One domain per line">{% if domain_list %}{% for domain in domain_list %}{{ domain }}
 {% endfor %}{% endif %}</textarea>
                         <small class="form-group__help">
-                            <em>(from Freshservice, one per line)</em>
+                            <em>(from PSA, one per line)</em>
                         </small>
                     </div>
 
@@ -258,7 +258,7 @@
                         <label class="form-group__label">Description</label>
                         <textarea class="form-group__input" id="edit-description" rows="3">{{ company.description or '' }}</textarea>
                         <small class="form-group__help">
-                            <em>(synced from Freshservice)</em>
+                            <em>(synced from PSA)</em>
                         </small>
                     </div>
                 </div>
@@ -281,7 +281,7 @@
                                 <option value="3-Year" {% if (company.contract_term_length or company.contract_term) == '3-Year' %}selected{% endif %}>3-Year</option>
                             </select>
                             <small class="form-group__help">
-                                <em>(from Freshservice: {{ company.contract_term_length or company.contract_term or 'Not Set' }})</em>
+                                <em>(from PSA: {{ company.contract_term_length or company.contract_term or 'Not Set' }})</em>
                             </small>
                         </div>
 
@@ -300,7 +300,7 @@
                             <label class="form-group__label">Contract Start Date</label>
                             <input type="date" class="form-group__input" id="edit-contract_start_date" value="{% if company.contract_start_date %}{{ company.contract_start_date.split('T')[0] if 'T' in company.contract_start_date else company.contract_start_date }}{% endif %}">
                             <small class="form-group__help">
-                                <em>(from Freshservice: <span id="contract-start-synced">{{ company.contract_start_date.split('T')[0] if company.contract_start_date and 'T' in company.contract_start_date else (company.contract_start_date or 'Not Set') }}</span>)</em>
+                                <em>(from PSA: <span id="contract-start-synced">{{ company.contract_start_date.split('T')[0] if company.contract_start_date and 'T' in company.contract_start_date else (company.contract_start_date or 'Not Set') }}</span>)</em>
                             </small>
                         </div>
                     </div>
@@ -343,7 +343,7 @@
         </div>
         <div class="card__body">
             <div id="locations-list">
-                <!-- Main Location (synced from Freshservice company address field) -->
+                <!-- Main Location (synced from PSA company address field) -->
                 <div class="location-item">
                     <div class="location-item__header">
                         <h3 class="location-item__name">Main Location</h3>
@@ -365,7 +365,7 @@
                     <div class="form-group edit-mode" style="display: none;">
                         <textarea class="form-group__input" id="edit-address" rows="3" placeholder="Full address">{{ company.address or '' }}</textarea>
                         <small class="form-group__help">
-                            <em>(from Freshservice: {{ company.address or 'Not Set' }})</em>
+                            <em>(from PSA: {{ company.address or 'Not Set' }})</em>
                         </small>
                     </div>
                 </div>

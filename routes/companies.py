@@ -213,7 +213,7 @@ def company_details(account_number):
 @companies_bp.route('/<string:account_number>/locations', methods=['GET'])
 @token_required
 def get_locations(account_number):
-    """Get all additional locations for a company (excluding main address from Freshservice)."""
+    """Get all additional locations for a company (excluding main address from PSA)."""
     company = Company.query.get_or_404(account_number)
 
     locations = Location.query.filter_by(company_account_number=account_number).all()
@@ -315,13 +315,13 @@ def update_company(account_number):
     # Update head_name and prime_user_name if IDs changed
     if 'head_user_id' in data and data['head_user_id']:
         from models import Contact
-        contact = Contact.query.filter_by(freshservice_id=int(data['head_user_id'])).first()
+        contact = Contact.query.filter_by(external_id=int(data['head_user_id'])).first()
         if contact:
             company.head_name = contact.name
 
     if 'prime_user_id' in data and data['prime_user_id']:
         from models import Contact
-        contact = Contact.query.filter_by(freshservice_id=int(data['prime_user_id'])).first()
+        contact = Contact.query.filter_by(external_id=int(data['prime_user_id'])).first()
         if contact:
             company.prime_user_name = contact.name
 

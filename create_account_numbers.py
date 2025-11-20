@@ -1,24 +1,25 @@
 #!/usr/bin/env python3
 """
-Create Account Numbers for Freshservice Companies
+Create Account Numbers for PSA Companies
 
-This script assigns unique 6-digit account numbers to companies in Freshservice
-that don't already have one. It uses the Freshservice API directly and updates
+This script assigns unique 6-digit account numbers to companies in the PSA system
+that don't already have one. It uses the PSA provider API and updates
 the Codex database after successful assignments.
 
-Auto-run: This should run automatically after Freshservice sync completes.
+Auto-run: This should run automatically after PSA sync completes.
 """
 
 import sys
 import os
 import random
 import time
+import configparser
 
 # Add app directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from app.freshservice_client import FreshserviceClient
 from app import app
+from app.psa import get_provider
 from models import Company
 from extensions import db
 
@@ -33,21 +34,40 @@ def get_existing_account_numbers():
 def create_account_numbers():
     """Main function to create account numbers for companies that need them."""
     print("=" * 60)
-    print("CREATE ACCOUNT NUMBERS FOR FRESHSERVICE COMPANIES")
+    print("CREATE ACCOUNT NUMBERS FOR PSA COMPANIES")
     print("=" * 60)
 
     with app.app_context():
-        # Initialize Freshservice client
-        fs_client = FreshserviceClient()
+        # Load config to get PSA provider
+        config_path = os.path.join(app.instance_path, 'codex.conf')
+        config = configparser.RawConfigParser()
+        config.read(config_path)
 
-        # Get all companies from Freshservice
-        print("\n1. Fetching companies from Freshservice...")
-        fs_companies = fs_client.get_all_companies()
-        if not fs_companies:
-            print("ERROR: Could not fetch companies from Freshservice")
+        # Get the default provider
+        default_provider = config.get('psa', 'default_provider', fallback='freshservice')
+
+        # Initialize PSA provider
+        try:
+            provider = get_provider(default_provider, config)
+        except Exception as e:
+            print(f"ERROR: Could not initialize PSA provider: {e}")
             return False
 
-        print(f"   Found {len(fs_companies)} total companies")
+        # Get all companies from PSA
+        print(f"\n1. Fetching companies from {provider.display_name}...")
+
+        # Use get_companies_raw to get the raw API response with custom_fields
+        if hasattr(provider, 'get_companies_raw'):
+            psa_companies = provider.get_companies_raw()
+        else:
+            print(f"ERROR: Provider {default_provider} does not support raw company fetch")
+            return False
+
+        if not psa_companies:
+            print(f"ERROR: Could not fetch companies from {provider.display_name}")
+            return False
+
+        print(f"   Found {len(psa_companies)} total companies")
 
         # Get existing account numbers
         existing_numbers = get_existing_account_numbers()
@@ -55,7 +75,7 @@ def create_account_numbers():
 
         # Find companies that need account numbers
         companies_to_update = []
-        for company in fs_companies:
+        for company in psa_companies:
             custom_fields = company.get('custom_fields', {})
             acc_num = custom_fields.get('account_number')
             if not acc_num:
@@ -83,11 +103,10 @@ def create_account_numbers():
 
             print(f"   → {company_name}: {new_number}")
 
-            # Update in Freshservice (send as integer, not string)
-            success = fs_client.update_company_custom_field(
+            # Update in PSA (send as integer, not string)
+            success = provider.update_company(
                 company_id,
-                'account_number',
-                new_number
+                {'account_number': new_number}
             )
 
             if success:

@@ -19,8 +19,14 @@ class Company(db.Model):
     # Primary key
     account_number = db.Column(db.String(50), primary_key=True)
 
-    # Core Freshservice fields (from top-level)
-    freshservice_id = db.Column(BigInteger, unique=True, nullable=False)
+    # PSA system configuration
+    psa_provider = db.Column(db.String(50), default='freshservice')  # 'freshservice', 'superops', etc.
+
+    # External PSA system identifier (generic - works with any PSA)
+    external_id = db.Column(BigInteger, unique=True, nullable=True)
+    external_source = db.Column(db.String(50), default='freshservice')  # Which PSA this ID came from
+
+    # Core fields
     name = db.Column(db.String(150), nullable=False)
     description = db.Column(db.Text)
     created_at = db.Column(db.String(100))
@@ -129,10 +135,13 @@ class Contact(db.Model):
     __tablename__ = 'contacts'
 
     # Primary key
-    id = db.Column(db.Integer, primary_key=True)  # Freshservice requester ID
+    id = db.Column(db.Integer, primary_key=True)
 
-    # Core Freshservice fields
-    freshservice_id = db.Column(BigInteger, unique=True, nullable=False)
+    # External PSA system identifier (generic - works with any PSA)
+    external_id = db.Column(BigInteger, unique=True, nullable=True)
+    external_source = db.Column(db.String(50), default='freshservice')  # Which PSA this ID came from
+
+    # Core fields
     first_name = db.Column(db.String(150))
     last_name = db.Column(db.String(150))
     name = db.Column(db.String(150), nullable=False)  # Computed: first_name + last_name
@@ -175,7 +184,6 @@ class Contact(db.Model):
     # Metadata
     created_at = db.Column(db.String(100))
     updated_at = db.Column(db.String(100))
-    external_id = db.Column(db.String(100))
     background_information = db.Column(db.Text)
     work_schedule_id = db.Column(BigInteger)
 
@@ -214,14 +222,20 @@ class DattoSiteLink(db.Model):
 
     company = db.relationship('Company', back_populates='datto_site_links')
 
-class FreshserviceAgent(db.Model):
+class PSAAgent(db.Model):
     """
-    Freshservice agents (technicians/staff) pulled from the Freshservice API.
+    PSA system agents (technicians/staff) pulled from PSA APIs (Freshservice, Superops, etc.).
     Used for mapping responder_id to agent names in tickets.
     """
-    __tablename__ = 'freshservice_agents'
+    __tablename__ = 'psa_agents'
 
-    id = db.Column(BigInteger, primary_key=True)  # Freshservice agent ID
+    id = db.Column(db.Integer, primary_key=True)
+
+    # External PSA system identifier
+    external_id = db.Column(BigInteger, nullable=False)
+    external_source = db.Column(db.String(50), nullable=False)  # 'freshservice', 'superops', etc.
+
+    # Core fields
     email = db.Column(db.String(150))
     first_name = db.Column(db.String(100))
     last_name = db.Column(db.String(100))
@@ -232,6 +246,9 @@ class FreshserviceAgent(db.Model):
     created_at = db.Column(db.String(50))
     updated_at = db.Column(db.String(50))
 
+    # Provider-specific data (for extensibility)
+    provider_data = db.Column(db.JSON)
+
     @property
     def name(self):
         """Full name of the agent."""
@@ -239,18 +256,33 @@ class FreshserviceAgent(db.Model):
             return f"{self.first_name} {self.last_name}"
         return self.first_name or self.last_name or f"Agent {self.id}"
 
+    __table_args__ = (
+        db.UniqueConstraint('external_id', 'external_source', name='unique_psa_agent'),
+    )
+
 class TicketDetail(db.Model):
     __tablename__ = 'ticket_details'
-    ticket_id = db.Column(BigInteger, primary_key=True)
+
+    # Use composite primary key for multi-PSA support
+    id = db.Column(db.Integer, primary_key=True)
+
+    # External PSA system identifier
+    external_id = db.Column(BigInteger, nullable=False)  # Ticket ID in the PSA system
+    external_source = db.Column(db.String(50), nullable=False, default='freshservice')  # 'freshservice', 'superops', etc.
+
     company_account_number = db.Column(db.String(50), db.ForeignKey('companies.account_number'), nullable=True)
     ticket_number = db.Column(db.String(50))
     subject = db.Column(db.Text)
     description = db.Column(db.Text)  # Initial ticket description
     description_text = db.Column(db.Text)  # Plain text version
-    status = db.Column(db.String(50))
-    status_id = db.Column(db.Integer)  # Freshservice status ID
-    priority = db.Column(db.String(50))
-    priority_id = db.Column(db.Integer)  # Freshservice priority ID (1=Low, 2=Medium, 3=High, 4=Urgent)
+
+    # Normalized status/priority (consistent across PSA systems)
+    status = db.Column(db.String(50))  # 'open', 'pending', 'resolved', 'closed', 'waiting_customer', 'on_hold'
+    priority = db.Column(db.String(50))  # 'low', 'medium', 'high', 'urgent'
+
+    # Original PSA-specific values (for reference/debugging)
+    status_id = db.Column(db.Integer)  # Original numeric status from PSA
+    priority_id = db.Column(db.Integer)  # Original numeric priority from PSA
     ticket_type = db.Column(db.String(50))  # 'Incident' or 'Service Request'
     requester_email = db.Column(db.String(150))
     requester_name = db.Column(db.String(150))
@@ -274,18 +306,22 @@ class TicketDetail(db.Model):
 
     # Composite indexes for common query patterns
     __table_args__ = (
+        db.UniqueConstraint('external_id', 'external_source', name='unique_ticket_external'),
         db.Index('idx_ticket_company', 'company_account_number'),
-        db.Index('idx_ticket_status', 'status_id'),
-        db.Index('idx_ticket_priority', 'priority_id'),
+        db.Index('idx_ticket_status', 'status'),
+        db.Index('idx_ticket_priority', 'priority'),
         db.Index('idx_ticket_updated', 'last_updated_at'),
         db.Index('idx_ticket_responder', 'responder_id'),
         db.Index('idx_ticket_group', 'group_id'),
+        db.Index('idx_ticket_source', 'external_source'),
     )
 
 class SyncJob(db.Model):
     __tablename__ = 'sync_jobs'
     id = db.Column(db.String(50), primary_key=True)  # UUID
-    script = db.Column(db.String(50), nullable=False)  # 'freshservice', 'datto', 'tickets'
+    script = db.Column(db.String(50), nullable=False)  # 'psa', 'datto', 'tickets'
+    provider = db.Column(db.String(50))  # 'freshservice', 'superops', etc. (for PSA syncs)
+    sync_type = db.Column(db.String(50))  # 'companies', 'contacts', 'agents', 'tickets', 'all'
     status = db.Column(db.String(20), nullable=False)  # 'running', 'completed', 'failed'
     started_at = db.Column(db.String(50), nullable=False)  # ISO timestamp
     completed_at = db.Column(db.String(50))  # ISO timestamp

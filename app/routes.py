@@ -2,12 +2,26 @@ from datetime import datetime, timezone
 from flask import render_template, g, jsonify, request
 from app import app
 from .auth import token_required, admin_required
-from models import Company, Contact, Asset, Location, TicketDetail, SyncJob, BillingPlan, PlanFeature, FeatureOption, FreshserviceAgent
+from models import Company, Contact, Asset, Location, TicketDetail, SyncJob, BillingPlan, PlanFeature, FeatureOption, PSAAgent
 from extensions import db
 import subprocess
 import os
 import uuid
 import threading
+import configparser
+
+
+def get_default_psa_provider():
+    """Get the default PSA provider from configuration.
+
+    Returns:
+        str: Provider name (e.g., 'freshservice', 'superops')
+    """
+    config_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'instance', 'codex.conf')
+    config = configparser.RawConfigParser()
+    config.read(config_path)
+    return config.get('psa', 'default_provider', fallback='freshservice')
+
 
 @app.route('/')
 @token_required
@@ -95,40 +109,46 @@ def run_sync_script(job_id, script_path, extra_args=None, follow_up_script=None)
                 job.completed_at = datetime.now(timezone.utc).isoformat()
                 db.session.commit()
 
-@app.route('/sync/freshservice', methods=['POST'])
+@app.route('/sync/psa', methods=['POST'])
 @admin_required
-def sync_freshservice():
-    """Trigger Freshservice sync script in background."""
+def sync_psa():
+    """Trigger PSA sync script in background for the default provider."""
     try:
         job_id = str(uuid.uuid4())
-        script_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'pull_freshservice.py')
-        follow_up_script = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'create_account_numbers.py')
+        script_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'sync_psa.py')
+        provider = get_default_psa_provider()
 
         # Create job entry in database
         job = SyncJob(
             id=job_id,
-            script='freshservice',
+            script='psa',
+            provider=provider,
+            sync_type='base',
             status='running',
-            started_at=datetime.now().isoformat()
+            started_at=datetime.now(timezone.utc).isoformat()
         )
         db.session.add(job)
         db.session.commit()
 
-        # Start background thread with auto-run of account number creation
-        thread = threading.Thread(target=run_sync_script, args=(job_id, script_path, None, follow_up_script))
+        # Start background thread with provider arguments (base = companies, contacts, agents only)
+        thread = threading.Thread(
+            target=run_sync_script,
+            args=(job_id, script_path, ['--provider', provider, '--type', 'base'])
+        )
         thread.daemon = True
         thread.start()
 
         return jsonify({
             'success': True,
             'job_id': job_id,
-            'message': 'Freshservice sync started in background (will auto-create account numbers)'
+            'message': f'{provider.title()} sync started in background'
         })
     except Exception as e:
         return jsonify({
             'success': False,
             'error': str(e)
         }), 500
+
 
 @app.route('/sync/datto', methods=['POST'])
 @admin_required
@@ -144,7 +164,7 @@ def sync_datto():
             id=job_id,
             script='datto',
             status='running',
-            started_at=datetime.now().isoformat()
+            started_at=datetime.now(timezone.utc).isoformat()
         )
         db.session.add(job)
         db.session.commit()
@@ -203,7 +223,7 @@ def sync_create_account_numbers():
             id=job_id,
             script='create-account-numbers',
             status='running',
-            started_at=datetime.now().isoformat()
+            started_at=datetime.now(timezone.utc).isoformat()
         )
         db.session.add(job)
         db.session.commit()
@@ -237,7 +257,7 @@ def sync_push_to_datto():
             id=job_id,
             script='push-to-datto',
             status='running',
-            started_at=datetime.now().isoformat()
+            started_at=datetime.now(timezone.utc).isoformat()
         )
         db.session.add(job)
         db.session.commit()
@@ -523,30 +543,36 @@ def api_get_company_tickets(account_number):
 @app.route('/sync/tickets', methods=['POST'])
 @admin_required
 def sync_tickets():
-    """Trigger Freshservice ticket sync script in background."""
+    """Trigger PSA ticket sync script in background."""
     try:
         job_id = str(uuid.uuid4())
-        script_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'sync_tickets_from_freshservice.py')
+        script_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'sync_psa.py')
+        provider = get_default_psa_provider()
 
         # Create job entry in database
         job = SyncJob(
             id=job_id,
-            script='tickets',
+            script='psa',
+            provider=provider,
+            sync_type='tickets',
             status='running',
-            started_at=datetime.now().isoformat()
+            started_at=datetime.now(timezone.utc).isoformat()
         )
         db.session.add(job)
         db.session.commit()
 
         # Start background thread
-        thread = threading.Thread(target=run_sync_script, args=(job_id, script_path))
+        thread = threading.Thread(
+            target=run_sync_script,
+            args=(job_id, script_path, ['--provider', provider, '--type', 'tickets'])
+        )
         thread.daemon = True
         thread.start()
 
         return jsonify({
             'success': True,
             'job_id': job_id,
-            'message': 'Ticket sync started in background'
+            'message': f'{provider.title()} ticket sync started in background'
         })
     except Exception as e:
         return jsonify({
@@ -558,17 +584,20 @@ def sync_tickets():
 @app.route('/sync/tickets/full-history', methods=['POST'])
 @admin_required
 def sync_tickets_full_history():
-    """Trigger full history ticket sync (2 years) in background."""
+    """Trigger full history ticket sync in background."""
     try:
         job_id = str(uuid.uuid4())
-        script_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'sync_tickets_from_freshservice.py')
+        script_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'sync_psa.py')
+        provider = get_default_psa_provider()
 
         # Create job entry in database
         job = SyncJob(
             id=job_id,
-            script='tickets_full_history',
+            script='psa',
+            provider=provider,
+            sync_type='tickets',
             status='running',
-            started_at=datetime.now().isoformat()
+            started_at=datetime.now(timezone.utc).isoformat()
         )
         db.session.add(job)
         db.session.commit()
@@ -576,7 +605,7 @@ def sync_tickets_full_history():
         # Start background thread with --full-history flag
         thread = threading.Thread(
             target=run_sync_script,
-            args=(job_id, script_path, ['--full-history'])
+            args=(job_id, script_path, ['--provider', provider, '--type', 'tickets', '--full-history'])
         )
         thread.daemon = True
         thread.start()
@@ -584,7 +613,7 @@ def sync_tickets_full_history():
         return jsonify({
             'success': True,
             'job_id': job_id,
-            'message': 'Full history ticket sync started in background (2 years)'
+            'message': f'{provider.title()} full history ticket sync started in background'
         })
     except Exception as e:
         return jsonify({
@@ -720,7 +749,7 @@ def sync_keycloak_agents():
             id=job_id,
             script='keycloak_agents',
             status='running',
-            started_at=datetime.now().isoformat()
+            started_at=datetime.now(timezone.utc).isoformat()
         )
         db.session.add(job)
         db.session.commit()
@@ -849,66 +878,40 @@ def api_active_tickets():
     group_id = request.args.get('group_id', type=int)
     responder_id = request.args.get('responder_id', type=int)
 
-    # Status IDs
-    OPEN_STATUS_ID = 2
-    PENDING_STATUS_ID = 3
-    WAITING_ON_CUSTOMER_STATUS_ID = 9
-    WAITING_ON_AGENT_STATUS_ID = 26
-    ON_HOLD_STATUS_ID = 23
-    UPDATE_NEEDED_STATUS_ID = 19
-    PENDING_HUBSPOT_STATUS_ID = 27
-    CLOSED_STATUS_ID = 5
-    RESOLVED_STATUS_ID = 4
-    JOB_COMPLETE_BILL_STATUS_ID = 15
-    BILLING_COMPLETE_CLOSE_STATUS_ID = 16
+    # Import PSA mappings for display names
+    from app.psa.mappings import get_status_display_name, get_priority_display_name
 
-    # SLA thresholds by priority (time since last update)
+    # SLA thresholds by normalized priority (time since last update)
     SLA_UPDATE_THRESHOLDS = {
-        4: timedelta(minutes=30),   # Urgent
-        3: timedelta(days=2),       # High
-        2: timedelta(days=3),       # Medium
-        1: timedelta(days=4)        # Low
+        'urgent': timedelta(minutes=30),
+        'high': timedelta(days=2),
+        'medium': timedelta(days=3),
+        'low': timedelta(days=4)
     }
 
     # FR SLA thresholds
     FR_SLA_CRITICAL_HOURS = 4
     FR_SLA_WARNING_HOURS = 12
 
-    # Priority text mapping
-    PRIORITY_MAP = {1: 'Low', 2: 'Medium', 3: 'High', 4: 'Urgent'}
+    # Closed/resolved statuses to exclude from active tickets
+    CLOSED_STATUSES = ['closed', 'resolved', 'job_complete_bill', 'billing_complete']
 
-    # Status text mapping
-    STATUS_MAP = {
-        OPEN_STATUS_ID: 'Open',
-        PENDING_STATUS_ID: 'Pending',
-        8: 'Scheduled',
-        WAITING_ON_CUSTOMER_STATUS_ID: 'Waiting on Customer',
-        10: 'Waiting on Third Party',
-        13: 'Under Investigation',
-        UPDATE_NEEDED_STATUS_ID: 'Update Needed',
-        ON_HOLD_STATUS_ID: 'On Hold',
-        WAITING_ON_AGENT_STATUS_ID: 'Customer Replied',
-        PENDING_HUBSPOT_STATUS_ID: 'Pending Hubspot',
-        JOB_COMPLETE_BILL_STATUS_ID: 'Job Complete - Bill',
-        BILLING_COMPLETE_CLOSE_STATUS_ID: 'Billing Complete - Close'
-    }
-
-    # Load agent mapping from database
+    # Load agent mapping from database (all providers)
     agent_mapping = {}
-    agents = FreshserviceAgent.query.all()
+    agents = PSAAgent.query.filter_by(active=True).all()
     for agent in agents:
-        agent_mapping[agent.id] = agent.name
+        agent_mapping[agent.external_id] = agent.name
 
     # Load requester mapping from contacts
     requester_mapping = {}
     contacts = Contact.query.all()
     for contact in contacts:
-        if contact.freshservice_id:
-            requester_mapping[contact.freshservice_id] = contact.name
+        if contact.external_id:
+            requester_mapping[contact.external_id] = contact.name
 
-    # Build base query - all non-closed tickets
+    # Build base query - all non-closed tickets using normalized status
     query = TicketDetail.query.filter(
-        TicketDetail.status_id.notin_([CLOSED_STATUS_ID, RESOLVED_STATUS_ID, JOB_COMPLETE_BILL_STATUS_ID, BILLING_COMPLETE_CLOSE_STATUS_ID])
+        TicketDetail.status.notin_(CLOSED_STATUSES)
     )
 
     if group_id:
@@ -1009,18 +1012,23 @@ def api_active_tickets():
         elif not requester_name:
             requester_name = 'N/A'
 
+        # Get display names using PSA mappings
+        source = getattr(t, 'external_source', 'freshservice')
+        status_text = get_status_display_name(t.status, source)
+        priority_text = get_priority_display_name(t.priority, source)
+
         return {
-            'id': t.ticket_id,
+            'id': t.external_id,  # Use external_id as the ticket ID
             'ticket_number': t.ticket_number,
             'subject': t.subject,
             'description_text': t.description_text,
             'status': t.status,
-            'status_id': t.status_id,
-            'status_text': STATUS_MAP.get(t.status_id, f'Status {t.status_id}'),
+            'status_id': t.status_id,  # Keep for backward compatibility
+            'status_text': status_text,
             'priority': t.priority,
-            'priority_id': t.priority_id,
+            'priority_id': t.priority_id,  # Keep for backward compatibility
             'priority_raw': t.priority_id,
-            'priority_text': PRIORITY_MAP.get(t.priority_id, f'P-{t.priority_id}'),
+            'priority_text': priority_text,
             'type': t.ticket_type,
             'ticket_type': t.ticket_type,
             'company_id': t.company_account_number,
@@ -1030,6 +1038,7 @@ def api_active_tickets():
             'responder_id': t.responder_id,
             'agent_name': agent_name,
             'group_id': t.group_id,
+            'source': source,  # Add PSA source
             'created_at_str': t.created_at,
             'updated_at_str': t.last_updated_at,
             'fr_due_by_str': t.fr_due_by,
@@ -1052,38 +1061,39 @@ def api_active_tickets():
 
     for ticket in tickets:
         updated_dt = parse_datetime(ticket.last_updated_at)
-        status_text = STATUS_MAP.get(ticket.status_id, f'Status {ticket.status_id}')
+        source = getattr(ticket, 'external_source', 'freshservice')
+        status_text = get_status_display_name(ticket.status, source)
         updated_friendly = time_since(updated_dt)
 
-        # Check if update is overdue based on priority
+        # Check if update is overdue based on normalized priority
         is_update_overdue = False
-        if updated_dt and ticket.priority_id:
-            threshold = SLA_UPDATE_THRESHOLDS.get(ticket.priority_id, timedelta(days=3))
+        if updated_dt and ticket.priority:
+            threshold = SLA_UPDATE_THRESHOLDS.get(ticket.priority, timedelta(days=3))
             is_update_overdue = (now - updated_dt) > threshold
 
         # Section 2: Customer Replied (Waiting on Agent)
-        if ticket.status_id == WAITING_ON_AGENT_STATUS_ID:
+        if ticket.status == 'customer_replied':
             sla_text = f'Customer Replied ({updated_friendly})'
             sla_class = 'sla-warning'
             section2.append(serialize_ticket(ticket, sla_text, sla_class))
             continue
 
         # Section 4: Pending Hubspot (special status)
-        if ticket.status_id == PENDING_HUBSPOT_STATUS_ID:
+        if ticket.status == 'pending_hubspot':
             sla_text = f'Pending Hubspot ({updated_friendly})'
             sla_class = 'sla-none'
             section4.append(serialize_ticket(ticket, sla_text, sla_class))
             continue
 
         # Section 3: Update overdue (but not for Pending Hubspot)
-        if is_update_overdue and ticket.status_id not in [PENDING_HUBSPOT_STATUS_ID]:
+        if is_update_overdue and ticket.status != 'pending_hubspot':
             sla_text = f'Update Overdue ({status_text}, {updated_friendly})'
             sla_class = 'sla-critical'
             section3.append(serialize_ticket(ticket, sla_text, sla_class))
             continue
 
         # Section 1: Open tickets needing first response or action
-        if ticket.status_id in [OPEN_STATUS_ID, UPDATE_NEEDED_STATUS_ID, PENDING_STATUS_ID]:
+        if ticket.status in ['open', 'update_needed', 'pending']:
             needs_fr = not ticket.first_responded_at
 
             if needs_fr:
@@ -1099,14 +1109,14 @@ def api_active_tickets():
             continue
 
         # Section 4: Other active (Waiting on Customer, On Hold, etc.)
-        if ticket.status_id == WAITING_ON_CUSTOMER_STATUS_ID:
+        if ticket.status == 'waiting_customer':
             agent_responded_dt = parse_datetime(ticket.agent_responded_at)
             agent_responded_friendly = time_since(agent_responded_dt)
             sla_text = 'Waiting on Customer'
             if agent_responded_friendly != 'N/A':
                 sla_text += f' (Agent: {agent_responded_friendly})'
             sla_class = 'sla-responded'
-        elif ticket.status_id == ON_HOLD_STATUS_ID:
+        elif ticket.status == 'on_hold':
             sla_text = f'On Hold ({updated_friendly})'
             sla_class = 'sla-none'
         else:
@@ -1127,10 +1137,12 @@ def api_active_tickets():
     section3.sort(key=sort_key)
     section4.sort(key=sort_key)
 
-    # Get the last successful ticket sync time
-    last_sync = SyncJob.query.filter_by(
-        script='tickets',
-        status='completed'
+    # Get the last successful ticket sync time (check both old and new formats)
+    last_sync = SyncJob.query.filter(
+        db.or_(
+            db.and_(SyncJob.script == 'tickets', SyncJob.status == 'completed'),
+            db.and_(SyncJob.script == 'psa', SyncJob.sync_type == 'tickets', SyncJob.status == 'completed')
+        )
     ).order_by(SyncJob.completed_at.desc()).first()
 
     last_sync_time = last_sync.completed_at if last_sync else None
@@ -1153,25 +1165,31 @@ def api_get_ticket(ticket_id):
     Get detailed information about a specific ticket.
 
     Includes conversations and notes.
-    If ticket is not in local database, fetches from FreshService API.
+    If ticket is not in local database, fetches from configured PSA provider.
     """
     import json
-    from .freshservice_client import fetch_ticket_from_freshservice
+    import configparser
+    import os
+    from app.psa import get_provider
+    from app.psa.mappings import get_status_display_name, get_priority_display_name
 
-    # First, try to get from local database
-    ticket = TicketDetail.query.get(ticket_id)
+    # First, try to get from local database by external_id
+    ticket = TicketDetail.query.filter_by(external_id=ticket_id).first()
     if ticket:
         # Get company info
         company = Company.query.get(ticket.company_account_number)
+        source = ticket.external_source or 'freshservice'
 
         return jsonify({
-            'id': ticket.ticket_id,
+            'id': ticket.external_id,
             'ticket_number': ticket.ticket_number,
             'subject': ticket.subject,
             'description': ticket.description,
             'description_text': ticket.description_text,
             'status': ticket.status,
+            'status_text': get_status_display_name(ticket.status, source),
             'priority': ticket.priority,
+            'priority_text': get_priority_display_name(ticket.priority, source),
             'company_id': ticket.company_account_number,
             'company_name': company.name if company else None,
             'requester_email': ticket.requester_email,
@@ -1181,18 +1199,33 @@ def api_get_ticket(ticket_id):
             'closed_at': ticket.closed_at,
             'total_hours_spent': float(ticket.total_hours_spent or 0),
             'conversations': json.loads(ticket.conversations) if ticket.conversations else [],
-            'notes': json.loads(ticket.notes) if ticket.notes else []
+            'notes': json.loads(ticket.notes) if ticket.notes else [],
+            'source': source
         })
 
-    # Ticket not in local database - try FreshService
-    app.logger.info(f"Ticket {ticket_id} not found locally, fetching from FreshService...")
-    freshservice_ticket = fetch_ticket_from_freshservice(ticket_id)
+    # Ticket not in local database - fetch from PSA provider
+    app.logger.info(f"Ticket {ticket_id} not found locally, fetching from PSA provider...")
 
-    if not freshservice_ticket:
-        return {'error': 'Ticket not found'}, 404
+    # Load config and get default provider
+    config_path = os.path.join(app.instance_path, 'codex.conf')
+    config = configparser.RawConfigParser()
+    config.read(config_path)
 
-    # Return FreshService data directly
-    return jsonify(freshservice_ticket)
+    # Use configured default provider (fallback to freshservice)
+    default_provider = config.get('psa', 'default_provider', fallback='freshservice')
+
+    try:
+        provider = get_provider(default_provider, config)
+        ticket_data = provider.get_ticket(ticket_id)
+
+        if not ticket_data:
+            return {'error': 'Ticket not found'}, 404
+
+        # Return normalized ticket data
+        return jsonify(ticket_data)
+    except Exception as e:
+        app.logger.error(f"Error fetching ticket from provider: {e}")
+        return {'error': 'Failed to fetch ticket from PSA'}, 500
 
 
 @app.route('/api/ticket/<int:ticket_id>/update', methods=['POST'])
@@ -1368,50 +1401,221 @@ def health_check():
     }
 
 
-@app.route('/api/config/freshservice_domain', methods=['GET'])
-@token_required
-def api_get_freshservice_domain():
-    """Get Freshservice web domain for ticket links from Codex configuration.
+# ===== GENERIC PSA ENDPOINTS =====
 
-    Returns web_domain if configured, otherwise falls back to domain.
-    This allows API calls to use one domain while ticket links use another
-    (e.g., custom domain like helpdesk.example.com).
+@app.route('/api/psa/agents', methods=['GET'])
+@token_required
+def api_get_psa_agents():
+    """
+    Get list of PSA agents (technicians) from all or specific provider.
+
+    Query params:
+        provider: Filter by provider name (e.g., 'freshservice', 'superops')
+
+    Returns list of agents with id, name, email, and source.
+    """
+    provider = request.args.get('provider')
+
+    query = PSAAgent.query.filter_by(active=True)
+    if provider:
+        query = query.filter_by(external_source=provider)
+
+    agents = query.all()
+
+    result = [
+        {
+            'id': agent.id,
+            'external_id': agent.external_id,
+            'source': agent.external_source,
+            'name': agent.name,
+            'email': agent.email,
+            'job_title': agent.job_title
+        }
+        for agent in agents
+    ]
+
+    # Sort by name
+    result.sort(key=lambda a: a['name'])
+
+    return jsonify(result)
+
+
+@app.route('/api/psa/config', methods=['GET'])
+@token_required
+def api_get_psa_config():
+    """
+    Get PSA configuration for all providers.
+
+    Returns ticket URL templates and other provider-specific config.
     """
     import configparser
     import os
 
     config_file = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'instance', 'codex.conf')
 
+    providers = {}
+
     try:
         config = configparser.ConfigParser()
         config.read(config_file)
-        # Use web_domain for ticket links if configured, otherwise fall back to domain
-        web_domain = config.get('freshservice', 'web_domain', fallback=None)
-        if not web_domain:
-            web_domain = config.get('freshservice', 'domain', fallback='freshservice.com')
-        return jsonify({'value': web_domain})
+
+        # Freshservice config
+        if config.has_section('freshservice'):
+            web_domain = config.get('freshservice', 'web_domain', fallback=None)
+            if not web_domain:
+                web_domain = config.get('freshservice', 'domain', fallback='freshservice.com')
+            providers['freshservice'] = {
+                'name': 'Freshservice',
+                'ticket_url_template': f'https://{web_domain}/a/tickets/{{ticket_id}}',
+                'company_url_template': f'https://{web_domain}/a/admin/departments/{{company_id}}',
+                'contact_url_template': f'https://{web_domain}/a/requesters/{{contact_id}}'
+            }
+
+        # Superops config (when available)
+        if config.has_section('psa.superops'):
+            providers['superops'] = {
+                'name': 'SuperOps',
+                'ticket_url_template': 'https://app.superops.com/tickets/{ticket_id}',
+                'company_url_template': 'https://app.superops.com/companies/{company_id}',
+                'contact_url_template': 'https://app.superops.com/contacts/{contact_id}'
+            }
+
     except Exception as e:
-        return jsonify({'value': 'freshservice.com', 'error': str(e)})
+        return jsonify({'providers': {}, 'error': str(e)})
+
+    return jsonify({'providers': providers})
 
 
-@app.route('/api/freshservice/agents', methods=['GET'])
+@app.route('/api/psa/tickets', methods=['GET'])
 @token_required
-def api_get_freshservice_agents():
+def api_get_psa_tickets():
     """
-    Get list of Freshservice agents (technicians) from database.
-    Used by Beacon for ticket agent name lookups.
+    Get tickets from all or specific PSA provider.
 
-    Returns list of agents with id and name.
+    Query params:
+        provider: Filter by provider name
+        status: Filter by normalized status ('open', 'pending', 'closed', etc.)
+        company: Filter by company account number
+        limit: Max results (default 100)
+
+    Returns list of tickets with normalized fields.
     """
-    agents = FreshserviceAgent.query.filter_by(active=True).all()
+    provider = request.args.get('provider')
+    status = request.args.get('status')
+    company = request.args.get('company')
+    limit = request.args.get('limit', 100, type=int)
+
+    query = TicketDetail.query
+
+    if provider:
+        query = query.filter_by(external_source=provider)
+    if status:
+        query = query.filter_by(status=status)
+    if company:
+        query = query.filter_by(company_account_number=company)
+
+    # Order by last updated, most recent first
+    query = query.order_by(TicketDetail.last_updated_at.desc())
+
+    tickets = query.limit(limit).all()
+
+    # Get company names for display
+    company_map = {}
+    if tickets:
+        account_numbers = list(set(t.company_account_number for t in tickets if t.company_account_number))
+        companies = Company.query.filter(Company.account_number.in_(account_numbers)).all()
+        company_map = {c.account_number: c.name for c in companies}
 
     result = [
-        {'id': agent.id, 'name': agent.name}
-        for agent in agents
+        {
+            'id': t.id,
+            'external_id': t.external_id,
+            'source': t.external_source,
+            'ticket_number': t.ticket_number,
+            'subject': t.subject,
+            'status': t.status,
+            'priority': t.priority,
+            'company_id': t.company_account_number,
+            'company_name': company_map.get(t.company_account_number, 'Unknown'),
+            'requester_name': t.requester_name,
+            'requester_email': t.requester_email,
+            'responder_id': t.responder_id,
+            'group_id': t.group_id,
+            'created_at': t.created_at,
+            'updated_at': t.last_updated_at,
+            'total_hours': t.total_hours_spent
+        }
+        for t in tickets
     ]
 
-    # Sort by name
-    result.sort(key=lambda a: a['name'])
+    return jsonify(result)
+
+
+@app.route('/api/psa/tickets/active', methods=['GET'])
+@token_required
+def api_get_psa_active_tickets():
+    """
+    Get active (open/pending) tickets from all providers.
+
+    Query params:
+        provider: Filter by provider name
+
+    Returns list of active tickets.
+    """
+    provider = request.args.get('provider')
+
+    # Active statuses
+    active_statuses = ['open', 'pending', 'waiting_customer', 'on_hold']
+
+    query = TicketDetail.query.filter(TicketDetail.status.in_(active_statuses))
+
+    if provider:
+        query = query.filter_by(external_source=provider)
+
+    # Order by priority (urgent first) then by last updated
+    query = query.order_by(
+        TicketDetail.priority_id.desc(),
+        TicketDetail.last_updated_at.desc()
+    )
+
+    tickets = query.all()
+
+    # Get company names and agent names for display
+    company_map = {}
+    if tickets:
+        account_numbers = list(set(t.company_account_number for t in tickets if t.company_account_number))
+        companies = Company.query.filter(Company.account_number.in_(account_numbers)).all()
+        company_map = {c.account_number: c.name for c in companies}
+
+    # Get agent names
+    agent_map = {}
+    responder_ids = list(set(t.responder_id for t in tickets if t.responder_id))
+    if responder_ids:
+        agents = PSAAgent.query.filter(PSAAgent.external_id.in_(responder_ids)).all()
+        agent_map = {a.external_id: a.name for a in agents}
+
+    result = [
+        {
+            'id': t.id,
+            'external_id': t.external_id,
+            'source': t.external_source,
+            'ticket_number': t.ticket_number,
+            'subject': t.subject,
+            'status': t.status,
+            'priority': t.priority,
+            'company_id': t.company_account_number,
+            'company_name': company_map.get(t.company_account_number, 'Unknown'),
+            'requester_name': t.requester_name,
+            'responder_id': t.responder_id,
+            'responder_name': agent_map.get(t.responder_id, 'Unassigned'),
+            'group_id': t.group_id,
+            'created_at': t.created_at,
+            'updated_at': t.last_updated_at,
+            'fr_due_by': t.fr_due_by,
+            'due_by': t.due_by
+        }
+        for t in tickets
+    ]
 
     return jsonify(result)
 
