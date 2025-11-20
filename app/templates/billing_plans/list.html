@@ -185,7 +185,7 @@
                                         <tr>
                                             <th>Term</th>
                                             {% for feature_type in feature_types %}
-                                            <th>{{ feature_type.replace('_', ' ') }}</th>
+                                            <th>{{ feature_type.replace('_', ' ') | title }}</th>
                                             {% endfor %}
                                         </tr>
                                     </thead>
@@ -236,7 +236,7 @@
                     {% for feature_type, options in feature_options.items() %}
                     <div class="card" style="flex: 1 1 31%; min-width: 300px;">
                         <div class="card__header">
-                            <h3 class="card__title">{{ feature_type.replace('_', ' ') }}</h3>
+                            <h3 class="card__title">{{ feature_type.replace('_', ' ') | title }}</h3>
                             <button class="btn btn--primary btn--small add-feature-option" data-feature-type="{{ feature_type }}">
                                 <span class="btn__label">
                                     <i data-lucide="plus" class="btn__icon"></i>
