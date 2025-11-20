@@ -7,4 +7,6 @@ load_dotenv('.flaskenv')
 from app import app
 
 if __name__ == "__main__":
-    app.run(port=5010)
+    # Security: Bind to localhost only - Codex should not be exposed externally
+    # Access via Nexus proxy at https://localhost:443/codex
+    app.run(host='127.0.0.1', port=5010)
