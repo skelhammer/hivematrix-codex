@@ -56,11 +56,11 @@ def push_account_numbers():
 
         print(f"   Found {len(datto_sites)} Datto RMM sites\n")
 
-        # Match Datto sites to Freshservice companies
+        # Match Datto sites to PSA companies
         actions = []
         unmapped_sites = []
 
-        print("3. Matching Datto sites to Freshservice companies...")
+        print("3. Matching Datto sites to PSA companies...")
         for site in datto_sites:
             datto_name = (site.get('name') or '').strip()
             datto_uid = site.get('uid')
@@ -70,7 +70,7 @@ def push_account_numbers():
             if REDBARN_KEYWORD in datto_name:
                 fs_name_match = REDBARN_FRESHSERVICE_TARGET
             else:
-                # Find longest matching Freshservice name in Datto site name
+                # Find longest matching PSA company name in Datto site name
                 # This prevents "A" from matching "A-1 Movers" if both exist
                 best_match = ''
                 for fs_name in company_map.keys():

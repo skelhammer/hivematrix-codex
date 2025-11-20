@@ -734,17 +734,25 @@
                     <thead>
                         <tr>
                             <th>ID</th>
+                            <th>PSA ID</th>
                             <th>Name</th>
+                            <th>Status</th>
                         </tr>
                     </thead>
                     <tbody>
             `;
 
             agents.forEach(agent => {
+                const statusBadge = agent.active
+                    ? '<span class="status-text status-text--success">Active</span>'
+                    : '<span class="status-text status-text--danger">Inactive</span>';
+
                 html += `
                     <tr>
                         <td>${agent.id}</td>
+                        <td>${agent.external_id}</td>
                         <td>${agent.name}</td>
+                        <td>${statusBadge}</td>
                     </tr>
                 `;
             });

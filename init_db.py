@@ -5,10 +5,12 @@ Codex Database Initialization and Migration Script
 This script handles both initial setup and schema migrations for production deployments.
 
 Features:
-- Interactive configuration setup (database, Freshservice, Datto)
+- Interactive database configuration setup
 - Intelligent schema migrations (adds new columns without data loss)
 - Safe for production use - preserves existing data
 - Can be run multiple times safely (idempotent)
+
+NOTE: PSA and Datto API keys should be configured through the Admin UI after database setup.
 
 Usage:
     python init_db.py                    # Interactive setup
@@ -102,84 +104,6 @@ def test_db_connection(creds):
         return None, False
 
 
-def get_freshservice_config(config):
-    """Prompts the user for Freshservice API configuration."""
-    print("\n--- Freshservice Configuration ---")
-    print("Codex is the ONLY service that connects to Freshservice.")
-    print("All other services (Ledger, KnowledgeTree) pull data from Codex.")
-
-    defaults = {
-        'domain': 'your-domain.freshservice.com',
-        'api_key': ''
-    }
-
-    if config.has_section('freshservice'):
-        defaults['domain'] = config.get('freshservice', 'domain', fallback=defaults['domain'])
-        defaults['api_key'] = config.get('freshservice', 'api_key', fallback=defaults['api_key'])
-
-    print("\nPress Enter to keep current values or skip if not using Freshservice.")
-    domain = input(f"Freshservice Domain [{defaults['domain']}]: ") or defaults['domain']
-
-    if defaults['api_key'] and defaults['api_key'] not in ['', 'YOUR_FRESHSERVICE_API_KEY']:
-        api_key_prompt = f"Freshservice API Key [****{defaults['api_key'][-4:]}]: "
-    else:
-        api_key_prompt = "Freshservice API Key [none]: "
-
-    api_key_input = getpass(api_key_prompt)
-    api_key = api_key_input if api_key_input else defaults['api_key']
-
-    return {
-        'domain': domain,
-        'api_key': api_key
-    }
-
-
-def get_datto_config(config):
-    """Prompts the user for Datto RMM API configuration."""
-    print("\n--- Datto RMM Configuration ---")
-    print("Codex is the ONLY service that connects to Datto RMM.")
-    print("All other services (Ledger, KnowledgeTree) pull asset data from Codex.")
-
-    defaults = {
-        'api_endpoint': 'https://zinfandel-api.centrastage.net',
-        'public_key': '',
-        'secret_key': ''
-    }
-
-    if config.has_section('datto'):
-        defaults['api_endpoint'] = config.get('datto', 'api_endpoint', fallback=defaults['api_endpoint'])
-        defaults['public_key'] = config.get('datto', 'public_key', fallback=defaults['public_key'])
-        defaults['secret_key'] = config.get('datto', 'secret_key', fallback=defaults['secret_key'])
-
-    print("\nPress Enter to keep current values or skip if not using Datto RMM.")
-    print("\nCommon Datto API endpoints:")
-    print("  - US: https://zinfandel-api.centrastage.net")
-    print("  - EU: https://concord-api.centrastage.net")
-    print("  - AU: https://pinotgrigio-api.centrastage.net")
-
-    api_endpoint = input(f"\nDatto API Endpoint [{defaults['api_endpoint']}]: ") or defaults['api_endpoint']
-
-    if defaults['public_key'] and defaults['public_key'] not in ['', 'YOUR_DATTO_PUBLIC_KEY']:
-        public_key_prompt = f"Datto Public Key [****{defaults['public_key'][-4:]}]: "
-    else:
-        public_key_prompt = "Datto Public Key [none]: "
-
-    public_key_input = input(public_key_prompt)
-    public_key = public_key_input if public_key_input else defaults['public_key']
-
-    if defaults['secret_key'] and defaults['secret_key'] not in ['', 'YOUR_DATTO_SECRET_KEY']:
-        secret_key_prompt = f"Datto Secret Key [****{defaults['secret_key'][-4:]}]: "
-    else:
-        secret_key_prompt = "Datto Secret Key [none]: "
-
-    secret_key_input = getpass(secret_key_prompt)
-    secret_key = secret_key_input if secret_key_input else defaults['secret_key']
-
-    return {
-        'api_endpoint': api_endpoint,
-        'public_key': public_key,
-        'secret_key': secret_key
-    }
 
 
 def migrate_schema():
@@ -410,23 +334,8 @@ def init_db_headless(db_host, db_port, db_name, db_user, db_password, migrate_on
     config.set('database_credentials', 'db_name', db_name)
     config.set('database_credentials', 'db_user', db_user)
 
-    # Preserve or create Freshservice section
-    if not config.has_section('freshservice'):
-        config.add_section('freshservice')
-    if not config.has_option('freshservice', 'domain'):
-        config.set('freshservice', 'domain', 'your-domain.freshservice.com')
-    if not config.has_option('freshservice', 'api_key'):
-        config.set('freshservice', 'api_key', 'YOUR_FRESHSERVICE_API_KEY')
-
-    # Preserve or create Datto section
-    if not config.has_section('datto'):
-        config.add_section('datto')
-    if not config.has_option('datto', 'api_endpoint'):
-        config.set('datto', 'api_endpoint', 'https://zinfandel-api.centrastage.net')
-    if not config.has_option('datto', 'public_key'):
-        config.set('datto', 'public_key', 'YOUR_DATTO_PUBLIC_KEY')
-    if not config.has_option('datto', 'secret_key'):
-        config.set('datto', 'secret_key', 'YOUR_DATTO_SECRET_KEY')
+    # Note: PSA and Datto API keys should be configured through the Admin UI
+    # We only preserve existing sections if they exist, but don't create them
 
     with open(config_path, 'w') as configfile:
         config.write(configfile)
@@ -462,7 +371,7 @@ def init_db(migrate_only=False, force=False, test_mode=False):
         # Non-interactive test mode - use defaults and show errors
         print("\n→ Running in TEST MODE (non-interactive)")
 
-        # Read existing config if it exists to preserve Freshservice/Datto settings
+        # Read existing config if it exists to preserve PSA/Datto settings
         if os.path.exists(config_path):
             config.read(config_path)
             print(f"→ Loaded existing configuration from: {config_path}")
@@ -507,24 +416,7 @@ def init_db(migrate_only=False, force=False, test_mode=False):
                 if key != 'password':
                     config.set('database_credentials', f'db_{key}', val)
 
-            # Add Freshservice section (with placeholder values in test mode)
-            if not config.has_section('freshservice'):
-                config.add_section('freshservice')
-            if not config.has_option('freshservice', 'domain'):
-                config.set('freshservice', 'domain', 'your-domain.freshservice.com')
-            if not config.has_option('freshservice', 'api_key'):
-                config.set('freshservice', 'api_key', 'YOUR_FRESHSERVICE_API_KEY')
-
-            # Add Datto section (with placeholder values in test mode)
-            if not config.has_section('datto'):
-                config.add_section('datto')
-            if not config.has_option('datto', 'api_endpoint'):
-                config.set('datto', 'api_endpoint', 'https://zinfandel-api.centrastage.net')
-            if not config.has_option('datto', 'public_key'):
-                config.set('datto', 'public_key', 'YOUR_DATTO_PUBLIC_KEY')
-            if not config.has_option('datto', 'secret_key'):
-                config.set('datto', 'secret_key', 'YOUR_DATTO_SECRET_KEY')
-
+            # Note: PSA and Datto API keys should be configured through the Admin UI
             # Save minimal config
             os.makedirs(instance_path, exist_ok=True)
             with open(config_path, 'w') as configfile:
@@ -574,22 +466,8 @@ def init_db(migrate_only=False, force=False, test_mode=False):
                 if retry != 'y':
                     sys.exit("Database configuration aborted.")
 
-        # Freshservice configuration
-        fs_config = get_freshservice_config(config)
-        if not config.has_section('freshservice'):
-            config.add_section('freshservice')
-        config.set('freshservice', 'domain', fs_config['domain'])
-        config.set('freshservice', 'api_key', fs_config['api_key'])
-
-        # Datto configuration
-        datto_config = get_datto_config(config)
-        if not config.has_section('datto'):
-            config.add_section('datto')
-        config.set('datto', 'api_endpoint', datto_config['api_endpoint'])
-        config.set('datto', 'public_key', datto_config['public_key'])
-        config.set('datto', 'secret_key', datto_config['secret_key'])
-
-        # Save configuration
+        # Note: PSA and Datto API keys should be configured through the Admin UI
+        # Save database configuration only
         with open(config_path, 'w') as configfile:
             config.write(configfile)
 

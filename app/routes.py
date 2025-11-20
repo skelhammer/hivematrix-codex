@@ -1013,7 +1013,7 @@ def api_active_tickets():
             requester_name = 'N/A'
 
         # Get display names using PSA mappings
-        source = getattr(t, 'external_source', 'freshservice')
+        source = getattr(t, 'external_source', None) or get_default_psa_provider()
         status_text = get_status_display_name(t.status, source)
         priority_text = get_priority_display_name(t.priority, source)
 
@@ -1061,7 +1061,7 @@ def api_active_tickets():
 
     for ticket in tickets:
         updated_dt = parse_datetime(ticket.last_updated_at)
-        source = getattr(ticket, 'external_source', 'freshservice')
+        source = getattr(ticket, 'external_source', None) or get_default_psa_provider()
         status_text = get_status_display_name(ticket.status, source)
         updated_friendly = time_since(updated_dt)
 
@@ -1178,7 +1178,7 @@ def api_get_ticket(ticket_id):
     if ticket:
         # Get company info
         company = Company.query.get(ticket.company_account_number)
-        source = ticket.external_source or 'freshservice'
+        source = ticket.external_source or get_default_psa_provider()
 
         return jsonify({
             'id': ticket.external_id,
@@ -1412,11 +1412,11 @@ def api_get_psa_agents():
     Query params:
         provider: Filter by provider name (e.g., 'freshservice', 'superops')
 
-    Returns list of agents with id, name, email, and source.
+    Returns list of agents with id, name, email, source, and active status.
     """
     provider = request.args.get('provider')
 
-    query = PSAAgent.query.filter_by(active=True)
+    query = PSAAgent.query
     if provider:
         query = query.filter_by(external_source=provider)
 
@@ -1429,13 +1429,14 @@ def api_get_psa_agents():
             'source': agent.external_source,
             'name': agent.name,
             'email': agent.email,
-            'job_title': agent.job_title
+            'job_title': agent.job_title,
+            'active': agent.active
         }
         for agent in agents
     ]
 
-    # Sort by name
-    result.sort(key=lambda a: a['name'])
+    # Sort by active status first (active first), then by name
+    result.sort(key=lambda a: (not a['active'], a['name']))
 
     return jsonify(result)
 

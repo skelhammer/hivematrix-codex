@@ -201,7 +201,7 @@ def save_companies(companies: list, provider_name: str) -> int:
         db.session.commit()
         count += 1
 
-    # Delete companies that no longer exist in Freshservice (like original script)
+    # Delete companies that no longer exist in PSA system
     log("  Checking for deleted companies...")
 
     # Get all external IDs from the fetched data
@@ -283,7 +283,7 @@ def save_contacts(contacts: list, provider_name: str) -> int:
     Returns:
         Number of contacts saved/updated
     """
-    # Build mapping from Freshservice department ID to account number
+    # Build mapping from PSA department ID to account number
     fs_dept_id_to_account_number = {}
     companies = Company.query.filter_by(external_source=provider_name).all()
     for company in companies:
@@ -292,14 +292,14 @@ def save_contacts(contacts: list, provider_name: str) -> int:
 
     count = 0
     for contact_data in contacts:
-        fs_user_id = contact_data.get('external_id')  # The Freshservice requester ID
+        fs_user_id = contact_data.get('external_id')  # The PSA requester ID
         email = contact_data.get('email')
 
         if not email:
             continue
 
         try:
-            # Check if contact exists by external_id (like original used freshservice_id)
+            # Check if contact exists by external_id
             existing_contact = Contact.query.filter_by(
                 external_id=fs_user_id,
                 external_source=provider_name
@@ -432,7 +432,7 @@ def save_contacts(contacts: list, provider_name: str) -> int:
             log(f"  ERROR processing contact {email}: {e}")
             db.session.rollback()
 
-    # Delete contacts that no longer exist in Freshservice (like original script)
+    # Delete contacts that no longer exist in PSA system
     log("  Checking for deleted contacts...")
 
     # Get all external IDs from the fetched data
@@ -467,6 +467,7 @@ def save_contacts(contacts: list, provider_name: str) -> int:
 def save_agents(agents: list, provider_name: str) -> int:
     """
     Save normalized agent data to database.
+    Also deletes agents that no longer exist in the PSA system.
 
     Args:
         agents: List of normalized agent dicts from provider
@@ -476,10 +477,14 @@ def save_agents(agents: list, provider_name: str) -> int:
         Number of agents saved/updated
     """
     count = 0
+    synced_external_ids = set()
+
     for agent_data in agents:
         external_id = agent_data.get('external_id')
         if not external_id:
             continue
+
+        synced_external_ids.add(external_id)
 
         # Find existing agent
         agent = PSAAgent.query.filter_by(
@@ -510,6 +515,18 @@ def save_agents(agents: list, provider_name: str) -> int:
         agent.department_ids = json.dumps(department_ids) if department_ids else None
 
         count += 1
+
+    # Delete agents that no longer exist in the PSA system
+    deleted_count = 0
+    existing_agents = PSAAgent.query.filter_by(external_source=provider_name).all()
+    for existing_agent in existing_agents:
+        if existing_agent.external_id not in synced_external_ids:
+            print(f"Deleting agent {existing_agent.name} (ID: {existing_agent.external_id}) - no longer exists in {provider_name}")
+            db.session.delete(existing_agent)
+            deleted_count += 1
+
+    if deleted_count > 0:
+        print(f"Deleted {deleted_count} agents that no longer exist in {provider_name}")
 
     db.session.commit()
     return count
