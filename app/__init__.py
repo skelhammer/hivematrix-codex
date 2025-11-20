@@ -107,6 +107,16 @@ app.config['KEYCLOAK_REALM'] = os.environ.get('KEYCLOAK_REALM', 'hivematrix')
 app.config['KEYCLOAK_ADMIN_USER'] = os.environ.get('KEYCLOAK_ADMIN_USER', 'admin')
 app.config['KEYCLOAK_ADMIN_PASS'] = os.environ.get('KEYCLOAK_ADMIN_PASS', 'admin')
 
+from app.version import VERSION, SERVICE_NAME as VERSION_SERVICE_NAME
+
+# Context processor to inject version into all templates
+@app.context_processor
+def inject_version():
+    return {
+        'app_version': VERSION,
+        'app_service_name': VERSION_SERVICE_NAME
+    }
+
 from app import routes
 from app import agent_routes  # Agent management and Keycloak sync routes
 
