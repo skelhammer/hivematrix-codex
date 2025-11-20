@@ -70,6 +70,25 @@ if [ ! -d "instance" ]; then
     echo ""
 fi
 
+# Create default database config if it doesn't exist
+if [ ! -f "instance/codex.conf" ]; then
+    echo -e "${YELLOW}Creating default database config...${NC}"
+    cat > instance/codex.conf <<EOF
+[database]
+connection_string = postgresql://codex_user:CHANGE_ME@localhost:5432/codex_db
+db_host = localhost
+db_port = 5432
+db_name = codex_db
+db_user = codex_user
+
+[psa]
+default_provider = freshservice
+EOF
+    echo -e "${GREEN}✓ Database config created${NC}"
+    echo -e "${YELLOW}  (Update instance/codex.conf with your database credentials)${NC}"
+    echo ""
+fi
+
 # Create minimal .flaskenv so init_db.py can run
 # Helm will regenerate this with full config later
 if [ ! -f ".flaskenv" ]; then

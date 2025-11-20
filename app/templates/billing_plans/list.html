@@ -36,9 +36,9 @@
 
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
-            <div class="card__body">
+            <div class="toast-container" id="toast-container">
                 {% for category, message in messages %}
-                    <div class="alert alert--{{ 'success' if category == 'success' else 'error' }}">
+                    <div class="toast toast--{{ 'success' if category == 'success' else 'warning' if category == 'warning' else 'info' if category == 'info' else 'error' }}" onclick="dismissToast(this)">
                         {{ message }}
                     </div>
                 {% endfor %}
@@ -492,6 +492,17 @@
         });
 
         lucide.createIcons();
+
+        // Toast notification auto-dismiss
+        function dismissToast(toast) {
+            toast.classList.add('toast--hiding');
+            setTimeout(() => toast.remove(), 300);
+        }
+
+        // Auto-dismiss toasts after 5 seconds
+        document.querySelectorAll('.toast').forEach(toast => {
+            setTimeout(() => dismissToast(toast), 5000);
+        });
     });
     </script>
     <div class="version-footer">

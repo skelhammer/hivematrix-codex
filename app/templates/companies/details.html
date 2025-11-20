@@ -7,6 +7,9 @@
     <script src="https://unpkg.com/lucide@latest"></script>
 </head>
 <body>
+    {# Toast container for notifications #}
+    <div class="toast-container" id="toast-container"></div>
+
     {% macro plan_badge_class(plan) -%}
     {%- if not plan or plan == 'No Plan' or plan == 'N/A' -%}
     {%- elif 'platinum' in plan.lower() -%}badge--platinum
@@ -573,6 +576,22 @@
     </div>
 
     <script>
+        // Toast notification functions
+        function dismissToast(toast) {
+            toast.classList.add('toast--hiding');
+            setTimeout(() => toast.remove(), 300);
+        }
+
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = `toast toast--${type}`;
+            toast.textContent = message;
+            toast.onclick = () => dismissToast(toast);
+            container.appendChild(toast);
+            setTimeout(() => dismissToast(toast), 5000);
+        }
+
         const companyAccountNumber = '{{ company.account_number }}';
         let isEditMode = false;
 
@@ -840,13 +859,13 @@
                 const result = await response.json();
 
                 if (response.ok && result.success) {
-                    alert('Company updated successfully!');
+                    showToast('Company updated successfully!', 'success');
                     window.location.reload();
                 } else {
-                    alert('Error updating company: ' + (result.error || 'Unknown error'));
+                    showToast('Error updating company: ' + (result.error || 'Unknown error'), 'error');
                 }
             } catch (error) {
-                alert('Error: ' + error.message);
+                showToast('Error: ' + error.message, 'error');
             }
         }
 
@@ -911,7 +930,7 @@
             const address = document.getElementById('location-address').value;
 
             if (!name || !address) {
-                alert('Please fill in all required fields');
+                showToast('Please fill in all required fields', 'error');
                 return;
             }
 
@@ -927,13 +946,14 @@
                 const result = await response.json();
 
                 if (response.ok && result.success) {
+                    showToast('Location added successfully!', 'success');
                     hideAddLocationModal();
                     loadLocations();
                 } else {
-                    alert('Error adding location: ' + (result.error || 'Unknown error'));
+                    showToast('Error adding location: ' + (result.error || 'Unknown error'), 'error');
                 }
             } catch (error) {
-                alert('Error: ' + error.message);
+                showToast('Error: ' + error.message, 'error');
             }
         }
 
@@ -952,12 +972,13 @@
                 const result = await response.json();
 
                 if (response.ok && result.success) {
+                    showToast('Location removed successfully!', 'success');
                     loadLocations();
                 } else {
-                    alert('Error removing location: ' + (result.error || 'Unknown error'));
+                    showToast('Error removing location: ' + (result.error || 'Unknown error'), 'error');
                 }
             } catch (error) {
-                alert('Error: ' + error.message);
+                showToast('Error: ' + error.message, 'error');
             }
         }
 

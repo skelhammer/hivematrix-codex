@@ -20,9 +20,9 @@
         </div>
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
-            <div class="card__body">
+            <div class="toast-container" id="toast-container">
                 {% for category, message in messages %}
-                    <div class="alert alert--{{ 'success' if category == 'success' else 'error' }}">
+                    <div class="toast toast--{{ 'success' if category == 'success' else 'warning' if category == 'warning' else 'info' if category == 'info' else 'error' }}" onclick="dismissToast(this)">
                         {{ message }}
                     </div>
                 {% endfor %}
@@ -699,6 +699,13 @@ sync_run_on_startup = false</code></pre>
                     btn.disabled = false;
                     btn.querySelector('.btn__label').textContent = buttonLabel;
 
+                    // Show toast notification
+                    if (data.status === 'completed' && data.success) {
+                        showToast(`${data.script} sync completed successfully!`, 'success');
+                    } else if (data.status === 'failed' || !data.success) {
+                        showToast(`${data.script} sync failed`, 'error');
+                    }
+
                     // Reload page after 3 seconds to show updated history
                     setTimeout(() => location.reload(), 3000);
                 }
@@ -833,6 +840,40 @@ sync_run_on_startup = false</code></pre>
         // Clear any orphaned intervals on page load
         window.addEventListener('beforeunload', () => {
             if (pollInterval) clearInterval(pollInterval);
+        });
+
+        // Toast notification functions
+        function dismissToast(toast) {
+            toast.classList.add('toast--hiding');
+            setTimeout(() => toast.remove(), 300);
+        }
+
+        function showToast(message, type = 'info') {
+            // Create toast container if it doesn't exist
+            let container = document.getElementById('toast-container');
+            if (!container) {
+                container = document.createElement('div');
+                container.id = 'toast-container';
+                container.className = 'toast-container';
+                document.body.appendChild(container);
+            }
+
+            // Create toast element
+            const toast = document.createElement('div');
+            toast.className = `toast toast--${type}`;
+            toast.textContent = message;
+            toast.onclick = () => dismissToast(toast);
+
+            // Add to container
+            container.appendChild(toast);
+
+            // Auto-dismiss after 5 seconds
+            setTimeout(() => dismissToast(toast), 5000);
+        }
+
+        // Auto-dismiss existing toasts after 5 seconds
+        document.querySelectorAll('.toast').forEach(toast => {
+            setTimeout(() => dismissToast(toast), 5000);
         });
     </script>
     <div class="version-footer">

@@ -7,6 +7,9 @@
     <script src="https://unpkg.com/lucide@latest"></script>
 </head>
 <body>
+    {# Toast container for notifications #}
+    <div class="toast-container" id="toast-container"></div>
+
     <div class="card">
         <div class="card__header">
             <h1 class="card__title">User Settings</h1>
@@ -103,6 +106,22 @@
     </div>
 
     <script>
+        // Toast notification functions
+        function dismissToast(toast) {
+            toast.classList.add('toast--hiding');
+            setTimeout(() => toast.remove(), 300);
+        }
+
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = `toast toast--${type}`;
+            toast.textContent = message;
+            toast.onclick = () => dismissToast(toast);
+            container.appendChild(toast);
+            setTimeout(() => dismissToast(toast), 5000);
+        }
+
         let currentTheme = 'light';
         let savedTheme = 'light';
         let currentHomePage = 'helm';
@@ -142,7 +161,7 @@
                 }
             } catch (error) {
                 console.error('Error loading settings:', error);
-                document.getElementById('save-status').innerHTML = '<span class="alert alert--error">Error loading settings</span>';
+                showToast('Error loading settings', 'error');
             }
         }
 
@@ -197,17 +216,17 @@
                 if (response.ok && result.success) {
                     savedTheme = currentTheme;
                     savedHomePage = currentHomePage;
-                    saveStatus.innerHTML = '<span class="u-text-success">✓ Settings saved!</span>';
+                    showToast('Settings saved successfully!', 'success');
 
                     // Reload page after 1 second to apply theme globally
                     setTimeout(() => {
                         window.location.reload();
                     }, 1000);
                 } else {
-                    saveStatus.innerHTML = `<span class="alert alert--error">Error: ${result.error || 'Failed to save settings'}</span>`;
+                    showToast(`Error: ${result.error || 'Failed to save settings'}`, 'error');
                 }
             } catch (error) {
-                saveStatus.innerHTML = `<span class="alert alert--error">Error: ${error.message}</span>`;
+                showToast(`Error: ${error.message}`, 'error');
             } finally {
                 saveBtn.disabled = false;
                 saveBtn.innerHTML = '<span class="btn__label"><i data-lucide="save" class="btn__icon"></i>Save Settings</span>';

@@ -249,10 +249,11 @@ def update_freshservice():
     
     with open(config_path, 'w') as f:
         config.write(f)
-    
+
     # Reload config in app
     current_app.config['CODEX_CONFIG'] = config
-    
+
+    flash('Freshservice configuration saved successfully', 'success')
     return redirect(url_for('admin.settings'))
 
 @admin_bp.route('/update-datto', methods=['POST'])
@@ -280,6 +281,7 @@ def update_datto():
     # Reload config in app
     current_app.config['CODEX_CONFIG'] = config
 
+    flash('Datto RMM configuration saved successfully', 'success')
     return redirect(url_for('admin.settings'))
 
 @admin_bp.route('/update-superops', methods=['POST'])
