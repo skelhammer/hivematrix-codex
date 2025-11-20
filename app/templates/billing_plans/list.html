@@ -13,12 +13,16 @@
             <div class="card__header-actions">
                 {% if user.permission_level == 'admin' %}
                 <button type="button" class="btn btn--secondary" onclick="openImportModal()">
-                    <i data-lucide="upload" style="width: 16px; height: 16px;"></i>
-                    Import JSON
+                    <span class="btn__label">
+                        <i data-lucide="upload" class="btn__icon"></i>
+                        Import JSON
+                    </span>
                 </button>
                 <button type="button" class="btn btn--secondary" onclick="window.location.href='{{ url_for('billing_plans.export_plans') }}'">
-                    <i data-lucide="download" style="width: 16px; height: 16px;"></i>
-                    Export JSON
+                    <span class="btn__label">
+                        <i data-lucide="download" class="btn__icon"></i>
+                        Export JSON
+                    </span>
                 </button>
                 {% endif %}
                 <button class="btn" onclick="window.location.href='{{ url_for('index') }}'">
@@ -45,11 +49,11 @@
         <div class="card__body">
             <div class="tabs">
                 <button class="tabs__tab tabs__tab--active" onclick="switchTab(event, 'plans')">
-                    <i data-lucide="dollar-sign" style="width: 16px; height: 16px; margin-right: 0.5rem;"></i>
+                    <i data-lucide="dollar-sign" class="btn__icon"></i>
                     Billing Plans
                 </button>
                 <button class="tabs__tab" onclick="switchTab(event, 'features')">
-                    <i data-lucide="settings" style="width: 16px; height: 16px; margin-right: 0.5rem;"></i>
+                    <i data-lucide="settings" class="btn__icon"></i>
                     Feature Options
                 </button>
             </div>
@@ -57,21 +61,23 @@
             <!-- Plans Tab -->
             <div id="plans-tab" class="tab-content tab-content--active">
                 {% if user.permission_level == 'admin' %}
-                <div class="plan-card">
-                    <div class="plan-card__header">
-                        <h2 class="plan-card__title">
-                            <i data-lucide="plus-circle" style="width: 18px; height: 18px; margin-right: 0.5rem;"></i>
+                <div class="card u-mb-3">
+                    <div class="card__header">
+                        <h2 class="card__title">
+                            <i data-lucide="plus-circle" class="btn__icon"></i>
                             Create New Billing Plan
                         </h2>
                     </div>
-                    <div class="plan-card__body">
-                        <p class="u-text-secondary u-mb-2" style="font-size: 0.875rem;">This will create a plan with all 4 contract term lengths.</p>
-                        <form action="{{ url_for('billing_plans.create_plan') }}" method="POST" class="form">
-                            <div style="display: flex; gap: 0.5rem; align-items: center;">
-                                <input type="text" name="new_plan_name" placeholder="Plan name (e.g., MSP Enterprise)" required class="form__input" style="max-width: 400px;">
+                    <div class="card__body">
+                        <p class="u-text-muted u-mb-2">This will create a plan with all 4 contract term lengths.</p>
+                        <form action="{{ url_for('billing_plans.create_plan') }}" method="POST">
+                            <div class="u-flex u-flex-gap u-items-center">
+                                <input type="text" name="new_plan_name" placeholder="Plan name (e.g., MSP Enterprise)" required class="form-group__input u-w-200">
                                 <button type="submit" class="btn btn--primary">
-                                    <i data-lucide="plus" style="width: 16px; height: 16px; margin-right: 0.5rem;"></i>
-                                    Create Plan
+                                    <span class="btn__label">
+                                        <i data-lucide="plus" class="btn__icon"></i>
+                                        Create Plan
+                                    </span>
                                 </button>
                             </div>
                         </form>
@@ -80,11 +86,11 @@
                 {% endif %}
 
                 {% for plan_name, plans in grouped_plans.items() %}
-                <div class="plan-card">
-                    <div class="plan-card__header">
-                        <h2 class="plan-card__title">
+                <div class="card u-mb-3">
+                    <div class="card__header">
+                        <h2 class="card__title">
                             <span class="expand-toggle" onclick="toggleTermRows('{{ plan_name | replace(' ', '_') }}', this)" title="Show/Hide Terms">
-                                <i data-lucide="chevron-down" style="width: 18px; height: 18px;"></i>
+                                <i data-lucide="chevron-down" class="btn__icon"></i>
                             </span>
                             {{ plan_name }}
                         </h2>
@@ -111,17 +117,17 @@
                             {% endif %}
                         </div>
                     </div>
-                    <div class="plan-card__body">
-                        <form method="POST" action="{{ url_for('billing_plans.save_plans') }}" class="form" id="form-{{ loop.index }}">
+                    <div class="card__body">
+                        <form method="POST" action="{{ url_for('billing_plans.save_plans') }}" id="form-{{ loop.index }}">
                             <input type="hidden" name="plan_name" value="{{ plan_name }}">
 
-                            <h3 class="section-header-{{ plan_name | replace(' ', '_') }}" style="margin-top: 0; margin-bottom: 0.75rem; font-size: 0.9375rem; font-weight: 600; color: var(--color-text-secondary);">Pricing Configuration</h3>
-                            <div class="section-content-{{ plan_name | replace(' ', '_') }} table-scroll" style="margin-bottom: 1.5rem;">
-                                <table class="compact-table">
+                            <h3 class="section-header-{{ plan_name | replace(' ', '_') }} u-mt-0 u-mb-2 u-text-muted">Pricing Configuration</h3>
+                            <div class="section-content-{{ plan_name | replace(' ', '_') }} table-wrapper u-mb-3">
+                                <table class="data-table">
                                     <thead>
                                         <tr>
-                                            <th style="width: 120px;">Term</th>
-                                            <th style="width: 130px;">Support</th>
+                                            <th>Term</th>
+                                            <th>Support</th>
                                             <th>User</th>
                                             <th>Workstation</th>
                                             <th>Server</th>
@@ -129,7 +135,7 @@
                                             <th>Switch</th>
                                             <th>Firewall</th>
                                             <th>Per Hour</th>
-                                            <th class="section-divider">BU Base WS</th>
+                                            <th>BU Base WS</th>
                                             <th>BU Base Srv</th>
                                             <th>Inc. TB</th>
                                             <th>$/TB Fee</th>
@@ -139,40 +145,40 @@
                                         {% for plan in plans %}
                                         <tr class="term-row-{{ plan_name | replace(' ', '_') }}" data-term="{{ plan.term_length }}">
                                             <td>
-                                                <span class="term-badge">{{ plan.term_length }}</span>
+                                                <span class="badge badge--info">{{ plan.term_length }}</span>
                                                 <input type="hidden" name="plan_ids" value="{{ plan.id }}">
                                             </td>
                                             <td>
-                                                <select name="support_level_{{ plan.id }}" class="form__select" {% if user.permission_level != 'admin' %}disabled{% endif %}>
+                                                <select name="support_level_{{ plan.id }}" class="form-group__input" {% if user.permission_level != 'admin' %}disabled{% endif %}>
                                                     <option value="Billed Hourly" {% if plan.support_level == 'Billed Hourly' %}selected{% endif %}>Billed Hourly</option>
                                                     <option value="Unlimited" {% if plan.support_level == 'Unlimited' %}selected{% endif %}>Unlimited</option>
                                                 </select>
                                             </td>
-                                            <td><input type="number" step="0.01" name="per_user_cost_{{ plan.id }}" value="{{ '%.2f'|format(plan.per_user_cost|float) }}" class="form__input" {% if user.permission_level != 'admin' %}readonly{% endif %}></td>
-                                            <td><input type="number" step="0.01" name="per_workstation_cost_{{ plan.id }}" value="{{ '%.2f'|format(plan.per_workstation_cost|float) }}" class="form__input" {% if user.permission_level != 'admin' %}readonly{% endif %}></td>
-                                            <td><input type="number" step="0.01" name="per_server_cost_{{ plan.id }}" value="{{ '%.2f'|format(plan.per_server_cost|float) }}" class="form__input" {% if user.permission_level != 'admin' %}readonly{% endif %}></td>
-                                            <td><input type="number" step="0.01" name="per_vm_cost_{{ plan.id }}" value="{{ '%.2f'|format(plan.per_vm_cost|float) }}" class="form__input" {% if user.permission_level != 'admin' %}readonly{% endif %}></td>
-                                            <td><input type="number" step="0.01" name="per_switch_cost_{{ plan.id }}" value="{{ '%.2f'|format(plan.per_switch_cost|float) }}" class="form__input" {% if user.permission_level != 'admin' %}readonly{% endif %}></td>
-                                            <td><input type="number" step="0.01" name="per_firewall_cost_{{ plan.id }}" value="{{ '%.2f'|format(plan.per_firewall_cost|float) }}" class="form__input" {% if user.permission_level != 'admin' %}readonly{% endif %}></td>
-                                            <td><input type="number" step="0.01" name="per_hour_ticket_cost_{{ plan.id }}" value="{{ '%.2f'|format(plan.per_hour_ticket_cost|float) }}" class="form__input" {% if user.permission_level != 'admin' %}readonly{% endif %}></td>
-                                            <td class="section-divider"><input type="number" step="0.01" name="backup_base_fee_workstation_{{ plan.id }}" value="{{ '%.2f'|format(plan.backup_base_fee_workstation|float) }}" class="form__input" {% if user.permission_level != 'admin' %}readonly{% endif %}></td>
-                                            <td><input type="number" step="0.01" name="backup_base_fee_server_{{ plan.id }}" value="{{ '%.2f'|format(plan.backup_base_fee_server|float) }}" class="form__input" {% if user.permission_level != 'admin' %}readonly{% endif %}></td>
-                                            <td><input type="number" step="0.1" name="backup_included_tb_{{ plan.id }}" value="{{ '%.1f'|format(plan.backup_included_tb|float) }}" class="form__input" {% if user.permission_level != 'admin' %}readonly{% endif %}></td>
-                                            <td><input type="number" step="0.01" name="backup_per_tb_fee_{{ plan.id }}" value="{{ '%.2f'|format(plan.backup_per_tb_fee|float) }}" class="form__input" {% if user.permission_level != 'admin' %}readonly{% endif %}></td>
+                                            <td><input type="number" step="0.01" name="per_user_cost_{{ plan.id }}" value="{{ '%.2f'|format(plan.per_user_cost|float) }}" class="form-group__input" {% if user.permission_level != 'admin' %}readonly{% endif %}></td>
+                                            <td><input type="number" step="0.01" name="per_workstation_cost_{{ plan.id }}" value="{{ '%.2f'|format(plan.per_workstation_cost|float) }}" class="form-group__input" {% if user.permission_level != 'admin' %}readonly{% endif %}></td>
+                                            <td><input type="number" step="0.01" name="per_server_cost_{{ plan.id }}" value="{{ '%.2f'|format(plan.per_server_cost|float) }}" class="form-group__input" {% if user.permission_level != 'admin' %}readonly{% endif %}></td>
+                                            <td><input type="number" step="0.01" name="per_vm_cost_{{ plan.id }}" value="{{ '%.2f'|format(plan.per_vm_cost|float) }}" class="form-group__input" {% if user.permission_level != 'admin' %}readonly{% endif %}></td>
+                                            <td><input type="number" step="0.01" name="per_switch_cost_{{ plan.id }}" value="{{ '%.2f'|format(plan.per_switch_cost|float) }}" class="form-group__input" {% if user.permission_level != 'admin' %}readonly{% endif %}></td>
+                                            <td><input type="number" step="0.01" name="per_firewall_cost_{{ plan.id }}" value="{{ '%.2f'|format(plan.per_firewall_cost|float) }}" class="form-group__input" {% if user.permission_level != 'admin' %}readonly{% endif %}></td>
+                                            <td><input type="number" step="0.01" name="per_hour_ticket_cost_{{ plan.id }}" value="{{ '%.2f'|format(plan.per_hour_ticket_cost|float) }}" class="form-group__input" {% if user.permission_level != 'admin' %}readonly{% endif %}></td>
+                                            <td><input type="number" step="0.01" name="backup_base_fee_workstation_{{ plan.id }}" value="{{ '%.2f'|format(plan.backup_base_fee_workstation|float) }}" class="form-group__input" {% if user.permission_level != 'admin' %}readonly{% endif %}></td>
+                                            <td><input type="number" step="0.01" name="backup_base_fee_server_{{ plan.id }}" value="{{ '%.2f'|format(plan.backup_base_fee_server|float) }}" class="form-group__input" {% if user.permission_level != 'admin' %}readonly{% endif %}></td>
+                                            <td><input type="number" step="0.1" name="backup_included_tb_{{ plan.id }}" value="{{ '%.1f'|format(plan.backup_included_tb|float) }}" class="form-group__input" {% if user.permission_level != 'admin' %}readonly{% endif %}></td>
+                                            <td><input type="number" step="0.01" name="backup_per_tb_fee_{{ plan.id }}" value="{{ '%.2f'|format(plan.backup_per_tb_fee|float) }}" class="form-group__input" {% if user.permission_level != 'admin' %}readonly{% endif %}></td>
                                         </tr>
                                         {% endfor %}
                                     </tbody>
                                 </table>
                             </div>
 
-                            <h3 class="section-header-{{ plan_name | replace(' ', '_') }}" style="margin-top: 0; margin-bottom: 0.75rem; font-size: 0.9375rem; font-weight: 600; color: var(--color-text-secondary);">Feature Configuration</h3>
-                            <div class="section-content-{{ plan_name | replace(' ', '_') }} table-scroll">
-                                <table class="compact-table">
+                            <h3 class="section-header-{{ plan_name | replace(' ', '_') }} u-mt-0 u-mb-2 u-text-muted">Feature Configuration</h3>
+                            <div class="section-content-{{ plan_name | replace(' ', '_') }} table-wrapper">
+                                <table class="data-table">
                                     <thead>
                                         <tr>
-                                            <th style="width: 120px;">Term</th>
+                                            <th>Term</th>
                                             {% for feature_type in feature_types %}
-                                            <th style="text-transform: capitalize;">{{ feature_type.replace('_', ' ') }}</th>
+                                            <th>{{ feature_type.replace('_', ' ') }}</th>
                                             {% endfor %}
                                         </tr>
                                     </thead>
@@ -180,11 +186,11 @@
                                         {% for plan in plans %}
                                         <tr class="term-row-{{ plan_name | replace(' ', '_') }}" data-term="{{ plan.term_length }}">
                                             <td>
-                                                <span class="term-badge">{{ plan.term_length }}</span>
+                                                <span class="badge badge--info">{{ plan.term_length }}</span>
                                             </td>
                                             {% for feature_type in feature_types %}
                                             <td>
-                                                <select name="feature_{{ feature_type.lower().replace(' ', '_') }}_{{ plan.id }}" class="form__select" {% if user.permission_level != 'admin' %}disabled{% endif %}>
+                                                <select name="feature_{{ feature_type.lower().replace(' ', '_') }}_{{ plan.id }}" class="form-group__input" {% if user.permission_level != 'admin' %}disabled{% endif %}>
                                                     {% for option in feature_options[feature_type] %}
                                                     <option value="{{ option.display_name }}" {% if plan.feature_dict.get(feature_type, 'Not Included') == option.display_name %}selected{% endif %}>{{ option.display_name }}</option>
                                                     {% endfor %}
@@ -198,7 +204,7 @@
                             </div>
                         </form>
                         {% if user.permission_level == 'admin' %}
-                        <form method="POST" action="{{ url_for('billing_plans.delete_plan') }}" id="delete-form-{{ loop.index }}" style="display: none;">
+                        <form method="POST" action="{{ url_for('billing_plans.delete_plan') }}" id="delete-form-{{ loop.index }}" class="u-hidden">
                             <input type="hidden" name="plan_name" value="{{ plan_name }}">
                         </form>
                         {% endif %}
@@ -210,53 +216,56 @@
             <!-- Features Tab -->
             <div id="features-tab" class="tab-content">
                 {% if user.permission_level == 'admin' %}
-                <p class="u-text-secondary u-mb-2">Manage the available options for each feature category. These options appear in the dropdown menus when configuring billing plans.</p>
+                <p class="u-text-muted u-mb-2">Manage the available options for each feature category. These options appear in the dropdown menus when configuring billing plans.</p>
 
-                <div class="u-mb-2">
+                <div class="u-mb-3">
                     <button type="button" class="btn btn--primary" onclick="openNewCategoryModal()">
-                        <i data-lucide="plus" style="width: 16px; height: 16px; margin-right: 0.5rem;"></i>
-                        Add New Category
+                        <span class="btn__label">
+                            <i data-lucide="plus" class="btn__icon"></i>
+                            Add New Category
+                        </span>
                     </button>
                 </div>
 
-                <div class="feature-grid">
+                <div class="u-flex u-flex-wrap u-flex-gap-2">
                     {% for feature_type, options in feature_options.items() %}
-                    <div class="feature-card">
-                        <div class="feature-card__header">
-                            <h3 class="feature-card__title">{{ feature_type.replace('_', ' ') }}</h3>
+                    <div class="card" style="flex: 1 1 300px; min-width: 280px;">
+                        <div class="card__header">
+                            <h3 class="card__title">{{ feature_type.replace('_', ' ') }}</h3>
                             <button class="btn btn--primary btn--small add-feature-option" data-feature-type="{{ feature_type }}">
                                 <span class="btn__label">
                                     <i data-lucide="plus" class="btn__icon"></i>
                                 </span>
                             </button>
                         </div>
-                        <ul class="feature-list">
+                        <div class="card__body">
                             {% for option in options %}
-                            <li class="feature-list__item">
-                                <span class="feature-list__name">{{ option.display_name }}</span>
-                                <div class="feature-list__actions">
+                            <div class="u-flex u-items-center u-mb-1" style="justify-content: space-between;">
+                                <span>{{ option.display_name }}</span>
+                                <div class="u-flex u-flex-gap-1">
                                     <button class="btn btn--secondary btn--small edit-feature-option" data-option-id="{{ option.id }}" data-option-name="{{ option.display_name }}" title="Edit">
-                                        <i data-lucide="edit-2" style="width: 14px; height: 14px;"></i>
+                                        <i data-lucide="edit-2" class="btn__icon"></i>
                                     </button>
                                     <form action="{{ url_for('billing_plans.delete_feature_option', option_id=option.id) }}" method="POST" class="u-inline" onsubmit="return confirm('Delete {{ option.display_name }}?');">
                                         <button type="submit" class="btn btn--danger btn--small" title="Delete">
-                                            <i data-lucide="trash-2" style="width: 14px; height: 14px;"></i>
+                                            <i data-lucide="trash-2" class="btn__icon"></i>
                                         </button>
                                     </form>
                                 </div>
-                            </li>
+                            </div>
                             {% endfor %}
-                        </ul>
+                        </div>
                     </div>
                     {% endfor %}
                 </div>
                 {% else %}
-                <p class="u-text-secondary">You need admin permissions to manage feature options.</p>
+                <p class="u-text-muted">You need admin permissions to manage feature options.</p>
                 {% endif %}
             </div>
         </div>
     </div>
 
+    <!-- Feature Option Modal -->
     <div id="featureModal" class="modal">
         <div class="modal__dialog">
             <div class="modal__header">
@@ -264,14 +273,14 @@
                 <button class="modal__close" onclick="closeFeatureModal()">&times;</button>
             </div>
             <div class="modal__body">
-                <form id="featureModalForm" method="POST" class="form">
+                <form id="featureModalForm" method="POST">
                     <input type="hidden" name="feature_type" id="featureModalType">
-                    <div class="form__group">
-                        <label for="featureModalName" class="form__label">Option Name</label>
-                        <input type="text" name="option_name" id="featureModalName" required class="form__input" placeholder="e.g., SentinelOne, Microsoft 365">
+                    <div class="form-group">
+                        <label for="featureModalName" class="form-group__label">Option Name</label>
+                        <input type="text" name="option_name" id="featureModalName" required class="form-group__input" placeholder="e.g., SentinelOne, Microsoft 365">
                     </div>
                     <div class="u-text-right u-mt-2">
-                        <button type="button" onclick="closeFeatureModal()" class="btn u-mr-1">Cancel</button>
+                        <button type="button" onclick="closeFeatureModal()" class="btn">Cancel</button>
                         <button type="submit" class="btn btn--primary">Save</button>
                     </div>
                 </form>
@@ -279,6 +288,7 @@
         </div>
     </div>
 
+    <!-- Import Modal -->
     <div id="importModal" class="modal">
         <div class="modal__dialog">
             <div class="modal__header">
@@ -286,17 +296,17 @@
                 <button class="modal__close" onclick="closeImportModal()">&times;</button>
             </div>
             <div class="modal__body">
-                <form action="{{ url_for('billing_plans.import_plans') }}" method="POST" enctype="multipart/form-data" class="form">
-                    <div class="form__group">
-                        <label for="json_file" class="form__label">Select JSON File</label>
-                        <input type="file" name="json_file" id="json_file" accept=".json" required class="form__input">
-                        <small class="form__help">The JSON file should contain "default_plans_data" and "default_features" arrays.</small>
+                <form action="{{ url_for('billing_plans.import_plans') }}" method="POST" enctype="multipart/form-data">
+                    <div class="form-group">
+                        <label for="json_file" class="form-group__label">Select JSON File</label>
+                        <input type="file" name="json_file" id="json_file" accept=".json" required class="form-group__input">
+                        <small class="u-text-muted">The JSON file should contain "default_plans_data" and "default_features" arrays.</small>
                     </div>
                     <div class="alert alert--info u-mt-2">
                         <strong>Note:</strong> Importing will skip any plans or features that already exist. Existing data will not be overwritten.
                     </div>
                     <div class="u-text-right u-mt-2">
-                        <button type="button" onclick="closeImportModal()" class="btn u-mr-1">Cancel</button>
+                        <button type="button" onclick="closeImportModal()" class="btn">Cancel</button>
                         <button type="submit" class="btn btn--primary">
                             <span class="btn__label">
                                 <i data-lucide="upload" class="btn__icon"></i>
@@ -309,6 +319,7 @@
         </div>
     </div>
 
+    <!-- Copy Terms Modal -->
     <div id="copyTermsModal" class="modal">
         <div class="modal__dialog">
             <div class="modal__header">
@@ -316,23 +327,23 @@
                 <button class="modal__close" onclick="closeCopyTermsModal()">&times;</button>
             </div>
             <div class="modal__body">
-                <form id="copyTermsForm" action="{{ url_for('billing_plans.copy_terms') }}" method="POST" class="form">
+                <form id="copyTermsForm" action="{{ url_for('billing_plans.copy_terms') }}" method="POST">
                     <input type="hidden" name="plan_name" id="copyTermsPlanName">
-                    <div class="form__group">
-                        <label for="copyTermsSource" class="form__label">Copy from which term?</label>
-                        <select name="source_term" id="copyTermsSource" class="form__select" required>
+                    <div class="form-group">
+                        <label for="copyTermsSource" class="form-group__label">Copy from which term?</label>
+                        <select name="source_term" id="copyTermsSource" class="form-group__input" required>
                             <option value="Month to Month">Month to Month</option>
                             <option value="1-Year">1-Year</option>
                             <option value="2-Year">2-Year</option>
                             <option value="3-Year">3-Year</option>
                         </select>
-                        <small class="form__help">All values from the selected term will be copied to the other 3 terms.</small>
+                        <small class="u-text-muted">All values from the selected term will be copied to the other 3 terms.</small>
                     </div>
                     <div class="alert alert--warning u-mt-2">
                         <strong>Warning:</strong> This will overwrite the values in all other terms for this plan. This action cannot be undone.
                     </div>
                     <div class="u-text-right u-mt-2">
-                        <button type="button" onclick="closeCopyTermsModal()" class="btn u-mr-1">Cancel</button>
+                        <button type="button" onclick="closeCopyTermsModal()" class="btn">Cancel</button>
                         <button type="submit" class="btn btn--primary">
                             <span class="btn__label">
                                 <i data-lucide="copy" class="btn__icon"></i>
@@ -345,6 +356,7 @@
         </div>
     </div>
 
+    <!-- New Category Modal -->
     <div id="categoryModal" class="modal">
         <div class="modal__dialog">
             <div class="modal__header">
@@ -352,20 +364,22 @@
                 <button class="modal__close" onclick="closeCategoryModal()">&times;</button>
             </div>
             <div class="modal__body">
-                <form action="{{ url_for('billing_plans.add_feature_category') }}" method="POST" class="form">
-                    <div class="form__group">
-                        <label for="categoryName" class="form__label">Category Name</label>
-                        <input type="text" name="category_name" id="categoryName" required class="form__input" placeholder="e.g., Web Filtering, Backup Solution">
-                        <small class="form__help">This will create a new feature category with a default "Not Included" option. You can then add specific options to this category.</small>
+                <form action="{{ url_for('billing_plans.add_feature_category') }}" method="POST">
+                    <div class="form-group">
+                        <label for="categoryName" class="form-group__label">Category Name</label>
+                        <input type="text" name="category_name" id="categoryName" required class="form-group__input" placeholder="e.g., Web Filtering, Backup Solution">
+                        <small class="u-text-muted">This will create a new feature category with a default "Not Included" option.</small>
                     </div>
                     <div class="alert alert--info u-mt-2">
-                        <strong>Note:</strong> New feature categories will appear in the Feature Configuration table. The system dynamically handles all feature types.
+                        <strong>Note:</strong> New feature categories will appear in the Feature Configuration table.
                     </div>
                     <div class="u-text-right u-mt-2">
-                        <button type="button" onclick="closeCategoryModal()" class="btn u-mr-1">Cancel</button>
+                        <button type="button" onclick="closeCategoryModal()" class="btn">Cancel</button>
                         <button type="submit" class="btn btn--primary">
-                            <i data-lucide="plus" style="width: 16px; height: 16px; margin-right: 0.5rem;"></i>
-                            Create Category
+                            <span class="btn__label">
+                                <i data-lucide="plus" class="btn__icon"></i>
+                                Create Category
+                            </span>
                         </button>
                     </div>
                 </form>
@@ -375,15 +389,12 @@
 
     <script>
     function switchTab(event, tabName) {
-        // Hide all tabs
         document.querySelectorAll('.tab-content').forEach(tab => {
             tab.classList.remove('tab-content--active');
         });
         document.querySelectorAll('.tabs__tab').forEach(tab => {
             tab.classList.remove('tabs__tab--active');
         });
-
-        // Show selected tab
         document.getElementById(tabName + '-tab').classList.add('tab-content--active');
         event.currentTarget.classList.add('tabs__tab--active');
     }
@@ -422,20 +433,12 @@
         const rows = document.querySelectorAll('.term-row-' + planId);
         const headers = document.querySelectorAll('.section-header-' + planId);
         const contents = document.querySelectorAll('.section-content-' + planId);
-
-        // Check if currently collapsed by looking at any row
         const isCollapsed = rows.length > 0 && rows[0].classList.contains('term-row--collapsed');
 
-        // Toggle rows
         rows.forEach(row => {
-            if (isCollapsed) {
-                row.classList.remove('term-row--collapsed');
-            } else {
-                row.classList.add('term-row--collapsed');
-            }
+            row.classList.toggle('term-row--collapsed', !isCollapsed);
         });
 
-        // Toggle section headers and content
         headers.forEach(header => {
             header.style.display = isCollapsed ? 'block' : 'none';
         });
@@ -443,12 +446,7 @@
             content.style.display = isCollapsed ? 'block' : 'none';
         });
 
-        // Toggle chevron rotation with CSS class
-        if (isCollapsed) {
-            toggleBtn.classList.remove('collapsed');
-        } else {
-            toggleBtn.classList.add('collapsed');
-        }
+        toggleBtn.classList.toggle('collapsed', !isCollapsed);
     }
 
     document.addEventListener('DOMContentLoaded', function() {
@@ -457,27 +455,13 @@
         const copyTermsModal = document.getElementById('copyTermsModal');
         const categoryModal = document.getElementById('categoryModal');
 
-        featureModal.addEventListener('click', function(e) {
-            if (e.target === this) {
-                closeFeatureModal();
-            }
-        });
-
-        importModal.addEventListener('click', function(e) {
-            if (e.target === this) {
-                closeImportModal();
-            }
-        });
-
-        copyTermsModal.addEventListener('click', function(e) {
-            if (e.target === this) {
-                closeCopyTermsModal();
-            }
-        });
-
-        categoryModal.addEventListener('click', function(e) {
-            if (e.target === this) {
-                closeCategoryModal();
+        [featureModal, importModal, copyTermsModal, categoryModal].forEach(modal => {
+            if (modal) {
+                modal.addEventListener('click', function(e) {
+                    if (e.target === this) {
+                        this.classList.remove('active');
+                    }
+                });
             }
         });
 
@@ -498,7 +482,7 @@
             button.addEventListener('click', function() {
                 const optionId = this.dataset.optionId;
                 const optionName = this.dataset.optionName;
-                document.getElementById('featureModalTitle').textContent = `Edit Feature Option`;
+                document.getElementById('featureModalTitle').textContent = 'Edit Feature Option';
                 document.getElementById('featureModalForm').action = `{{ url_for('billing_plans.edit_feature_option', option_id=0) }}`.replace('0', optionId);
                 document.getElementById('featureModalName').value = optionName;
                 featureModal.classList.add('active');
