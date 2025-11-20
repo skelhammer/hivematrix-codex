@@ -50,10 +50,10 @@ app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
 # Scheduler configuration
 app.config['SYNC_FRESHSERVICE_ENABLED'] = config.getboolean('scheduler', 'sync_freshservice_enabled', fallback=True)
 app.config['SYNC_DATTO_ENABLED'] = config.getboolean('scheduler', 'sync_datto_enabled', fallback=True)
-app.config['SYNC_TICKETS_ENABLED'] = config.getboolean('scheduler', 'sync_tickets_enabled', fallback=False)
+app.config['SYNC_TICKETS_ENABLED'] = config.getboolean('scheduler', 'sync_tickets_enabled', fallback=True)
 app.config['SYNC_FRESHSERVICE_SCHEDULE'] = config.get('scheduler', 'sync_freshservice_schedule', fallback='daily')
 app.config['SYNC_DATTO_SCHEDULE'] = config.get('scheduler', 'sync_datto_schedule', fallback='daily')
-app.config['SYNC_TICKETS_SCHEDULE'] = config.get('scheduler', 'sync_tickets_schedule', fallback='hourly')
+app.config['SYNC_TICKETS_SCHEDULE'] = config.get('scheduler', 'sync_tickets_schedule', fallback='frequent')
 app.config['SYNC_RUN_ON_STARTUP'] = config.getboolean('scheduler', 'sync_run_on_startup', fallback=False)
 
 # Load services configuration for service-to-service calls

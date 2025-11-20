@@ -10,9 +10,14 @@ from apscheduler.triggers.interval import IntervalTrigger
 import subprocess
 import os
 import logging
+import uuid
+from datetime import datetime, timezone
 from flask import current_app
 
 logger = logging.getLogger(__name__)
+
+# Store app reference for database access
+_app = None
 
 # Global scheduler instance
 scheduler = None
@@ -20,32 +25,111 @@ scheduler = None
 
 def run_sync_script(script_name):
     """
-    Run a sync script as a background subprocess.
+    Run a sync script as a background subprocess with SyncJob tracking.
 
     Args:
         script_name: Name of the script (e.g., 'pull_freshservice.py')
     """
+    global _app
+
     try:
-        script_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), script_name)
-        python_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'pyenv', 'bin', 'python')
+        base_dir = os.path.dirname(os.path.dirname(__file__))
+        script_path = os.path.join(base_dir, script_name)
+        python_path = os.path.join(base_dir, 'pyenv', 'bin', 'python')
 
         if not os.path.exists(python_path):
             python_path = 'python3'
 
         logger.info(f"Running scheduled sync: {script_name}")
 
-        # Run script in background
-        subprocess.Popen(
+        # Determine script type for SyncJob record
+        if 'ticket' in script_name:
+            script_type = 'tickets'
+        elif 'freshservice' in script_name:
+            script_type = 'freshservice'
+        elif 'datto' in script_name:
+            script_type = 'datto'
+        else:
+            script_type = script_name.replace('.py', '')
+
+        job_id = None
+
+        # Create SyncJob record if app is available
+        if _app is not None:
+            from models import SyncJob
+            from extensions import db
+
+            with _app.app_context():
+                job_id = str(uuid.uuid4())
+                job = SyncJob(
+                    id=job_id,
+                    script=script_type,
+                    status='running',
+                    started_at=datetime.now(timezone.utc).isoformat()
+                )
+                db.session.add(job)
+                db.session.commit()
+                logger.info(f"Created SyncJob {job_id} for {script_type}")
+
+        # Run script synchronously to capture result
+        result = subprocess.run(
             [python_path, script_path],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            cwd=os.path.dirname(script_path)
+            capture_output=True,
+            text=True,
+            timeout=7200,  # 2 hour timeout
+            cwd=base_dir
         )
 
-        logger.info(f"Started scheduled sync: {script_name}")
+        # Update SyncJob with result
+        if _app is not None and job_id:
+            from models import SyncJob
+            from extensions import db
+
+            with _app.app_context():
+                job = db.session.get(SyncJob, job_id)
+                if job:
+                    job.status = 'completed' if result.returncode == 0 else 'failed'
+                    job.success = result.returncode == 0
+                    job.output = result.stdout[-1000:] if result.stdout else None
+                    job.error = result.stderr[-1000:] if result.stderr else None
+                    job.completed_at = datetime.now(timezone.utc).isoformat()
+                    db.session.commit()
+                    logger.info(f"Updated SyncJob {job_id}: {job.status}")
+
+        if result.returncode == 0:
+            logger.info(f"Completed scheduled sync: {script_name}")
+        else:
+            logger.error(f"Scheduled sync failed: {script_name} - {result.stderr[:200] if result.stderr else 'No error output'}")
+
+    except subprocess.TimeoutExpired:
+        logger.error(f"Scheduled sync timed out: {script_name}")
+        if _app is not None and job_id:
+            from models import SyncJob
+            from extensions import db
+
+            with _app.app_context():
+                job = db.session.get(SyncJob, job_id)
+                if job:
+                    job.status = 'failed'
+                    job.success = False
+                    job.error = 'Script timed out after 2 hours'
+                    job.completed_at = datetime.now(timezone.utc).isoformat()
+                    db.session.commit()
 
     except Exception as e:
         logger.error(f"Error running scheduled sync {script_name}: {e}")
+        if _app is not None and job_id:
+            from models import SyncJob
+            from extensions import db
+
+            with _app.app_context():
+                job = db.session.get(SyncJob, job_id)
+                if job:
+                    job.status = 'failed'
+                    job.success = False
+                    job.error = str(e)
+                    job.completed_at = datetime.now(timezone.utc).isoformat()
+                    db.session.commit()
 
 
 def run_freshservice_sync():
@@ -97,11 +181,14 @@ def init_scheduler(app):
     Args:
         app: Flask application instance
     """
-    global scheduler
+    global scheduler, _app
 
     if scheduler is not None:
         logger.warning("Scheduler already initialized")
         return scheduler
+
+    # Store app reference for database access in sync jobs
+    _app = app
 
     scheduler = BackgroundScheduler(daemon=True)
 

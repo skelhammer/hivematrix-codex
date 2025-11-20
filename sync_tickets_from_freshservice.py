@@ -32,7 +32,7 @@ from models import Company, TicketDetail
 # Configuration
 ACCOUNT_NUMBER_FIELD = "account_number"
 MAX_RETRIES = 3
-DEFAULT_TICKET_HOURS = 0.25  # 15 minutes default
+DEFAULT_TICKET_HOURS = 0  # No default time
 
 
 def get_freshservice_credentials():
@@ -87,6 +87,25 @@ def get_latest_ticket_timestamp(full_history=False):
         print("No existing tickets found. Performing initial sync for the past 3 months.")
         print("(Use --full-history for complete ticket history)")
         return datetime.now(timezone.utc) - timedelta(days=90)
+
+
+def get_last_sync_time():
+    """Gets the timestamp of the last successful ticket sync from SyncJob table."""
+    from models import SyncJob
+    last_sync = SyncJob.query.filter_by(
+        script='tickets',
+        status='completed'
+    ).order_by(SyncJob.completed_at.desc()).first()
+
+    if last_sync and last_sync.started_at:
+        try:
+            # Use started_at to ensure we don't miss any tickets
+            dt = datetime.fromisoformat(last_sync.started_at.replace('Z', '+00:00'))
+            return dt
+        except:
+            pass
+
+    return None
 
 
 def get_company_map_from_api(base_url, headers):
@@ -283,6 +302,44 @@ def get_ticket_conversations(base_url, headers, ticket_id):
     return []
 
 
+def get_ticket_details(base_url, headers, ticket_id):
+    """Fetch ticket details with stats and conversations in one API call.
+
+    This is optimized to reduce API calls - combines stats and conversations fetch.
+    Returns: (stats_dict, conversations_list)
+    """
+    endpoint = f"{base_url}/api/v2/tickets/{ticket_id}?include=stats,conversations"
+    retries = 0
+
+    while retries < MAX_RETRIES:
+        try:
+            response = requests.get(endpoint, headers=headers, timeout=60)
+
+            if response.status_code == 429:
+                retry_after = int(response.headers.get('Retry-After', 10))
+                time.sleep(retry_after)
+                retries += 1
+                continue
+
+            if response.status_code == 404:
+                return {}, []
+
+            response.raise_for_status()
+            data = response.json()
+            ticket_data = data.get('ticket', {})
+            stats = ticket_data.get('stats', {}) or {}
+            conversations = ticket_data.get('conversations', []) or []
+            return stats, conversations
+
+        except requests.exceptions.RequestException as e:
+            print(f"  -> WARN: Could not fetch details for ticket {ticket_id}: {e}", file=sys.stderr)
+            retries += 1
+            time.sleep(5)
+
+    print(f"  -> ERROR: Failed to fetch details for ticket {ticket_id} after {MAX_RETRIES} retries.", file=sys.stderr)
+    return {}, []
+
+
 def strip_html(html_content):
     """Remove HTML tags and return plain text."""
     if not html_content:
@@ -340,8 +397,16 @@ def sync_tickets(full_sync=False, full_history=False):
             # Fetch ALL tickets (including closed) from all time
             tickets = get_updated_tickets(base_url, headers, open_only=False)
         else:
-            # Regular sync: Fetch all OPEN tickets (any age)
-            tickets = get_updated_tickets(base_url, headers, open_only=True)
+            # Regular sync: Fetch all tickets updated since last sync
+            # This includes closed tickets so their status gets updated in the database
+            last_sync = get_last_sync_time()
+            if last_sync:
+                print(f"Last sync was at {last_sync.isoformat()}")
+                tickets = get_updated_tickets(base_url, headers, since_timestamp=last_sync, open_only=False)
+            else:
+                # No previous sync - fetch all open tickets for initial load
+                print("No previous sync found, fetching all open tickets...")
+                tickets = get_updated_tickets(base_url, headers, open_only=True)
         if tickets is None:
             print("ERROR: Failed to fetch tickets. Aborting.", file=sys.stderr)
             return 1
@@ -350,133 +415,155 @@ def sync_tickets(full_sync=False, full_history=False):
             print("\nNo new or updated tickets found.")
             return 0
 
+        # Log all fetched ticket IDs for debugging
+        fetched_ids = sorted([t['id'] for t in tickets])
+        print(f"\nFetched ticket IDs from Freshservice: {fetched_ids}")
+
         # Process tickets
         print(f"\nProcessing {len(tickets)} tickets and fetching time entries...")
         processed = 0
+        failed = 0
+        failed_tickets = []
 
         for ticket in tickets:
             department_id = ticket.get('department_id')
             account_number = fs_id_to_account_map.get(department_id)
 
+            ticket_id = ticket['id']
+
             if not account_number:
+                print(f"  -> Processing Ticket #{ticket_id}... (no department mapping)")
+            else:
+                print(f"  -> Processing Ticket #{ticket_id}...")
+
+            try:
+                # Fetch time entries
+                total_hours = get_time_entries_for_ticket(base_url, headers, ticket_id)
+
+                # Fetch ticket details (stats + conversations) in one optimized API call
+                print(f"    -> Fetching ticket details (stats + conversations)...")
+                stats, conversations = get_ticket_details(base_url, headers, ticket_id)
+
+                # Create or update ticket record
+                ticket_record = TicketDetail.query.get(ticket_id)
+                if not ticket_record:
+                    ticket_record = TicketDetail(ticket_id=ticket_id)
+
+                ticket_record.company_account_number = account_number
+                ticket_record.ticket_number = str(ticket_id)
+                ticket_record.subject = ticket.get('subject', 'No Subject')
+                ticket_record.description = ticket.get('description', '')
+                ticket_record.description_text = strip_html(ticket.get('description_text') or ticket.get('description', ''))
+
+                # Status mapping
+                status_map = {2: 'Open', 3: 'Pending', 4: 'Resolved', 5: 'Closed',
+                             9: 'Waiting on Customer', 23: 'On Hold', 26: 'Waiting on Agent',
+                             19: 'Update Needed', 27: 'Pending Hubspot'}
+                status_id = ticket.get('status')
+                ticket_record.status_id = status_id
+                ticket_record.status = status_map.get(status_id, ticket.get('status_name', 'Unknown'))
+
+                # Priority mapping
+                priority_map = {1: 'Low', 2: 'Medium', 3: 'High', 4: 'Urgent'}
+                priority_id = ticket.get('priority')
+                ticket_record.priority_id = priority_id
+                ticket_record.priority = priority_map.get(priority_id, ticket.get('priority_name', 'Medium'))
+
+                # Ticket type
+                ticket_record.ticket_type = ticket.get('type', 'Incident')
+
+                # Requester info
+                requester = ticket.get('requester', {})
+                if isinstance(requester, dict):
+                    ticket_record.requester_email = requester.get('email')
+                    ticket_record.requester_name = requester.get('name')
+                ticket_record.requester_id = ticket.get('requester_id')
+
+                # Assignment info
+                ticket_record.responder_id = ticket.get('responder_id')
+                ticket_record.group_id = ticket.get('group_id')
+
+                # Timestamps
+                ticket_record.created_at = ticket.get('created_at')
+                ticket_record.last_updated_at = ticket.get('updated_at')
+
+                # Only set closed_at if ticket is actually closed
+                if status_id == 5:
+                    ticket_record.closed_at = ticket.get('updated_at')
+                else:
+                    ticket_record.closed_at = None
+
+                # SLA fields
+                ticket_record.fr_due_by = ticket.get('fr_due_by')
+                ticket_record.due_by = ticket.get('due_by')
+
+                # Stats (first response times) - already fetched with get_ticket_details
+                ticket_record.first_responded_at = stats.get('first_responded_at')
+                ticket_record.agent_responded_at = stats.get('agent_responded_at')
+
+                ticket_record.total_hours_spent = total_hours
+
+                # Store conversations as JSON
+                import json
+                conversation_data = []
+                note_data = []
+
+                for conv in conversations:
+                    conv_entry = {
+                        'id': conv.get('id'),
+                        'body': strip_html(conv.get('body', '')),
+                        'body_html': conv.get('body', ''),
+                        'from_email': conv.get('from_email'),
+                        'to_emails': conv.get('to_emails', []),
+                        'created_at': conv.get('created_at'),
+                        'updated_at': conv.get('updated_at'),
+                        'incoming': conv.get('incoming', False),
+                        'private': conv.get('private', False),
+                        'user_id': conv.get('user_id'),
+                        'support_email': conv.get('support_email')
+                    }
+
+                    # Separate private notes from public conversations
+                    if conv.get('private'):
+                        note_data.append(conv_entry)
+                    else:
+                        conversation_data.append(conv_entry)
+
+                ticket_record.conversations = json.dumps(conversation_data) if conversation_data else None
+                ticket_record.notes = json.dumps(note_data) if note_data else None
+
+                print(f"    -> Stored {len(conversation_data)} conversations and {len(note_data)} notes")
+
+                db.session.add(ticket_record)
+                processed += 1
+
+                # Commit in batches
+                if processed % 50 == 0:
+                    try:
+                        db.session.commit()
+                        print(f"  -> Committed {processed} tickets so far...")
+                    except Exception as commit_error:
+                        db.session.rollback()
+                        print(f"    ✗ Batch commit failed: {commit_error}")
+                        # The failed ticket is still in the session, so we continue
+
+            except Exception as e:
+                db.session.rollback()
+                failed += 1
+                failed_tickets.append(ticket_id)
+                print(f"    ✗ Failed to process ticket #{ticket_id}: {e}")
                 continue
 
-            ticket_id = ticket['id']
-            print(f"  -> Processing Ticket #{ticket_id}...")
-
-            # Fetch time entries
-            total_hours = get_time_entries_for_ticket(base_url, headers, ticket_id)
-
-            if total_hours == 0:
-                total_hours = DEFAULT_TICKET_HOURS
-                print(f"    -> No time entries found. Assigning default {DEFAULT_TICKET_HOURS} hours.")
-
-            # Fetch conversation history
-            print(f"    -> Fetching conversation history...")
-            conversations = get_ticket_conversations(base_url, headers, ticket_id)
-
-            # Create or update ticket record
-            ticket_record = TicketDetail.query.get(ticket_id)
-            if not ticket_record:
-                ticket_record = TicketDetail(ticket_id=ticket_id)
-
-            ticket_record.company_account_number = account_number
-            ticket_record.ticket_number = str(ticket_id)
-            ticket_record.subject = ticket.get('subject', 'No Subject')
-            ticket_record.description = ticket.get('description', '')
-            ticket_record.description_text = strip_html(ticket.get('description_text') or ticket.get('description', ''))
-
-            # Status mapping
-            status_map = {2: 'Open', 3: 'Pending', 4: 'Resolved', 5: 'Closed',
-                         9: 'Waiting on Customer', 23: 'On Hold', 26: 'Waiting on Agent',
-                         19: 'Update Needed', 27: 'Pending Hubspot'}
-            status_id = ticket.get('status')
-            ticket_record.status_id = status_id
-            ticket_record.status = status_map.get(status_id, ticket.get('status_name', 'Unknown'))
-
-            # Priority mapping
-            priority_map = {1: 'Low', 2: 'Medium', 3: 'High', 4: 'Urgent'}
-            priority_id = ticket.get('priority')
-            ticket_record.priority_id = priority_id
-            ticket_record.priority = priority_map.get(priority_id, ticket.get('priority_name', 'Medium'))
-
-            # Ticket type
-            ticket_record.ticket_type = ticket.get('type', 'Incident')
-
-            # Requester info
-            requester = ticket.get('requester', {})
-            if isinstance(requester, dict):
-                ticket_record.requester_email = requester.get('email')
-                ticket_record.requester_name = requester.get('name')
-            ticket_record.requester_id = ticket.get('requester_id')
-
-            # Assignment info
-            ticket_record.responder_id = ticket.get('responder_id')
-            ticket_record.group_id = ticket.get('group_id')
-
-            # Timestamps
-            ticket_record.created_at = ticket.get('created_at')
-            ticket_record.last_updated_at = ticket.get('updated_at')
-
-            # Only set closed_at if ticket is actually closed
-            if status_id == 5:
-                ticket_record.closed_at = ticket.get('updated_at')
-            else:
-                ticket_record.closed_at = None
-
-            # SLA fields
-            ticket_record.fr_due_by = ticket.get('fr_due_by')
-            ticket_record.due_by = ticket.get('due_by')
-
-            # Stats (first response times)
-            stats = ticket.get('stats', {}) or {}
-            ticket_record.first_responded_at = stats.get('first_responded_at')
-            ticket_record.agent_responded_at = stats.get('agent_responded_at')
-
-            ticket_record.total_hours_spent = total_hours
-
-            # Store conversations as JSON
-            import json
-            conversation_data = []
-            note_data = []
-
-            for conv in conversations:
-                conv_entry = {
-                    'id': conv.get('id'),
-                    'body': strip_html(conv.get('body', '')),
-                    'body_html': conv.get('body', ''),
-                    'from_email': conv.get('from_email'),
-                    'to_emails': conv.get('to_emails', []),
-                    'created_at': conv.get('created_at'),
-                    'updated_at': conv.get('updated_at'),
-                    'incoming': conv.get('incoming', False),
-                    'private': conv.get('private', False),
-                    'user_id': conv.get('user_id'),
-                    'support_email': conv.get('support_email')
-                }
-
-                # Separate private notes from public conversations
-                if conv.get('private'):
-                    note_data.append(conv_entry)
-                else:
-                    conversation_data.append(conv_entry)
-
-            ticket_record.conversations = json.dumps(conversation_data) if conversation_data else None
-            ticket_record.notes = json.dumps(note_data) if note_data else None
-
-            print(f"    -> Stored {len(conversation_data)} conversations and {len(note_data)} notes")
-
-            db.session.add(ticket_record)
-            processed += 1
-
-            # Commit in batches
-            if processed % 50 == 0:
-                db.session.commit()
-                print(f"  -> Committed {processed} tickets so far...")
-
         # Final commit
-        db.session.commit()
-        print(f"\n✓ Successfully synced {processed} tickets.")
+        try:
+            db.session.commit()
+            print(f"\n✓ Successfully synced {processed} tickets.")
+            if failed > 0:
+                print(f"✗ Failed to sync {failed} tickets: {failed_tickets}")
+        except Exception as e:
+            db.session.rollback()
+            print(f"\n✗ Final commit failed: {e}")
+            return 1
 
         return 0
 

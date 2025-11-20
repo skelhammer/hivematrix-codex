@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from flask import render_template, g, jsonify, request
 from app import app
 from .auth import token_required, admin_required
@@ -56,7 +56,7 @@ def run_sync_script(job_id, script_path, extra_args=None, follow_up_script=None)
                 job.success = result.returncode == 0
                 job.output = result.stdout[-1000:]  # Last 1000 chars
                 job.error = result.stderr[-1000:] if result.stderr else None
-                job.completed_at = datetime.now().isoformat()
+                job.completed_at = datetime.now(timezone.utc).isoformat()
                 db.session.commit()
 
                 # Run follow-up script if main script succeeded
@@ -82,7 +82,7 @@ def run_sync_script(job_id, script_path, extra_args=None, follow_up_script=None)
                 job.status = 'failed'
                 job.success = False
                 job.error = f'Script timed out after {timeout//60} minutes'
-                job.completed_at = datetime.now().isoformat()
+                job.completed_at = datetime.now(timezone.utc).isoformat()
                 db.session.commit()
 
     except Exception as e:
@@ -92,7 +92,7 @@ def run_sync_script(job_id, script_path, extra_args=None, follow_up_script=None)
                 job.status = 'failed'
                 job.success = False
                 job.error = str(e)
-                job.completed_at = datetime.now().isoformat()
+                job.completed_at = datetime.now(timezone.utc).isoformat()
                 db.session.commit()
 
 @app.route('/sync/freshservice', methods=['POST'])
@@ -698,7 +698,7 @@ def sync_keycloak_agents():
                 job = db.session.get(SyncJob, job_id)
                 if job:
                     job.status = 'completed'
-                    job.completed_at = datetime.now().isoformat()
+                    job.completed_at = datetime.now(timezone.utc).isoformat()
                     job.output = ''.join(output_lines)
                     job.success = len(errors) == 0
                     db.session.commit()
@@ -707,7 +707,7 @@ def sync_keycloak_agents():
                 job = db.session.get(SyncJob, job_id)
                 if job:
                     job.status = 'failed'
-                    job.completed_at = datetime.now().isoformat()
+                    job.completed_at = datetime.now(timezone.utc).isoformat()
                     job.error = str(e)
                     job.success = False
                     db.session.commit()
@@ -1075,8 +1075,8 @@ def api_active_tickets():
             section4.append(serialize_ticket(ticket, sla_text, sla_class))
             continue
 
-        # Section 3: Update overdue (but not for waiting/hold statuses)
-        if is_update_overdue and ticket.status_id not in [WAITING_ON_CUSTOMER_STATUS_ID, ON_HOLD_STATUS_ID, PENDING_HUBSPOT_STATUS_ID]:
+        # Section 3: Update overdue (but not for Pending Hubspot)
+        if is_update_overdue and ticket.status_id not in [PENDING_HUBSPOT_STATUS_ID]:
             sla_text = f'Update Overdue ({status_text}, {updated_friendly})'
             sla_class = 'sla-critical'
             section3.append(serialize_ticket(ticket, sla_text, sla_class))
@@ -1127,13 +1127,22 @@ def api_active_tickets():
     section3.sort(key=sort_key)
     section4.sort(key=sort_key)
 
+    # Get the last successful ticket sync time
+    last_sync = SyncJob.query.filter_by(
+        script='tickets',
+        status='completed'
+    ).order_by(SyncJob.completed_at.desc()).first()
+
+    last_sync_time = last_sync.completed_at if last_sync else None
+
     return jsonify({
         'section1': section1,
         'section2': section2,
         'section3': section3,
         'section4': section4,
         'total_active': len(tickets),
-        'last_updated': now.isoformat()
+        'last_updated': now.isoformat(),
+        'last_sync_time': last_sync_time
     })
 
 

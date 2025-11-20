@@ -242,7 +242,7 @@ class FreshserviceAgent(db.Model):
 class TicketDetail(db.Model):
     __tablename__ = 'ticket_details'
     ticket_id = db.Column(BigInteger, primary_key=True)
-    company_account_number = db.Column(db.String(50), db.ForeignKey('companies.account_number'), nullable=False)
+    company_account_number = db.Column(db.String(50), db.ForeignKey('companies.account_number'), nullable=True)
     ticket_number = db.Column(db.String(50))
     subject = db.Column(db.Text)
     description = db.Column(db.Text)  # Initial ticket description
