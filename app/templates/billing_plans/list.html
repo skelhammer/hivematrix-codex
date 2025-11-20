@@ -48,15 +48,22 @@
 
         <div class="card__body">
             <div class="tabs">
-                <button class="tabs__tab tabs__tab--active" onclick="switchTab(event, 'plans')" style="display: inline-flex; align-items: center; gap: 0.5rem;">
+                <button class="tabs__tab tabs__tab--active" onclick="switchTab(event, 'plans')" style="display: inline-flex; align-items: center; gap: 0.5rem;" id="plans-tab-btn">
                     <i data-lucide="dollar-sign" style="width: 16px; height: 16px;"></i>
                     Billing Plans
                 </button>
-                <button class="tabs__tab" onclick="switchTab(event, 'features')" style="display: inline-flex; align-items: center; gap: 0.5rem;">
+                <button class="tabs__tab" onclick="switchTab(event, 'features')" style="display: inline-flex; align-items: center; gap: 0.5rem;" id="features-tab-btn">
                     <i data-lucide="settings" style="width: 16px; height: 16px;"></i>
                     Feature Options
                 </button>
             </div>
+            <style>
+                .tabs__tab--active {
+                    background: var(--color-primary) !important;
+                    color: white !important;
+                    border-radius: 6px;
+                }
+            </style>
 
             <!-- Plans Tab -->
             <div id="plans-tab" class="tab-content tab-content--active">
