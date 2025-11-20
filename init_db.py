@@ -256,7 +256,19 @@ def migrate_schema():
 
                 if missing_columns:
                     print(f"\n→ Updating table '{table_name}' - adding {len(missing_columns)} columns:")
+
+                    # Validate table name is a valid identifier
+                    import re
+                    if not re.match(r'^[a-zA-Z_][a-zA-Z0-9_]*$', table_name):
+                        print(f"   ✗ Invalid table name format: {table_name}")
+                        continue
+
                     for col_name in missing_columns:
+                        # Validate column name is a valid identifier
+                        if not re.match(r'^[a-zA-Z_][a-zA-Z0-9_]*$', col_name):
+                            print(f"   ✗ Invalid column name format: {col_name}")
+                            continue
+
                         col = table.columns[col_name]
                         col_type = col.type.compile(db.engine.dialect)
 
@@ -281,7 +293,8 @@ def migrate_schema():
                             nullable = "NULL"
                             print(f"   ⚠ Column '{col_name}' is NOT NULL but has no default - making nullable for safety")
 
-                        sql = f"ALTER TABLE {table_name} ADD COLUMN {col_name} {col_type} {default} {nullable}"
+                        # Use quoted identifiers for safety
+                        sql = f'ALTER TABLE "{table_name}" ADD COLUMN "{col_name}" {col_type} {default} {nullable}'
 
                         try:
                             with db.engine.connect() as conn:
