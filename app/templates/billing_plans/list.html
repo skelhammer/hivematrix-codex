@@ -145,26 +145,26 @@
                                         {% for plan in plans %}
                                         <tr class="term-row-{{ plan_name | replace(' ', '_') }}" data-term="{{ plan.term_length }}">
                                             <td>
-                                                <span class="badge badge--info">{{ plan.term_length }}</span>
+                                                {{ plan.term_length }}
                                                 <input type="hidden" name="plan_ids" value="{{ plan.id }}">
                                             </td>
                                             <td>
-                                                <select name="support_level_{{ plan.id }}" class="form-group__input" {% if user.permission_level != 'admin' %}disabled{% endif %}>
+                                                <select name="support_level_{{ plan.id }}" {% if user.permission_level != 'admin' %}disabled{% endif %}>
                                                     <option value="Billed Hourly" {% if plan.support_level == 'Billed Hourly' %}selected{% endif %}>Billed Hourly</option>
                                                     <option value="Unlimited" {% if plan.support_level == 'Unlimited' %}selected{% endif %}>Unlimited</option>
                                                 </select>
                                             </td>
-                                            <td><input type="number" step="0.01" name="per_user_cost_{{ plan.id }}" value="{{ '%.2f'|format(plan.per_user_cost|float) }}" class="form-group__input" {% if user.permission_level != 'admin' %}readonly{% endif %}></td>
-                                            <td><input type="number" step="0.01" name="per_workstation_cost_{{ plan.id }}" value="{{ '%.2f'|format(plan.per_workstation_cost|float) }}" class="form-group__input" {% if user.permission_level != 'admin' %}readonly{% endif %}></td>
-                                            <td><input type="number" step="0.01" name="per_server_cost_{{ plan.id }}" value="{{ '%.2f'|format(plan.per_server_cost|float) }}" class="form-group__input" {% if user.permission_level != 'admin' %}readonly{% endif %}></td>
-                                            <td><input type="number" step="0.01" name="per_vm_cost_{{ plan.id }}" value="{{ '%.2f'|format(plan.per_vm_cost|float) }}" class="form-group__input" {% if user.permission_level != 'admin' %}readonly{% endif %}></td>
-                                            <td><input type="number" step="0.01" name="per_switch_cost_{{ plan.id }}" value="{{ '%.2f'|format(plan.per_switch_cost|float) }}" class="form-group__input" {% if user.permission_level != 'admin' %}readonly{% endif %}></td>
-                                            <td><input type="number" step="0.01" name="per_firewall_cost_{{ plan.id }}" value="{{ '%.2f'|format(plan.per_firewall_cost|float) }}" class="form-group__input" {% if user.permission_level != 'admin' %}readonly{% endif %}></td>
-                                            <td><input type="number" step="0.01" name="per_hour_ticket_cost_{{ plan.id }}" value="{{ '%.2f'|format(plan.per_hour_ticket_cost|float) }}" class="form-group__input" {% if user.permission_level != 'admin' %}readonly{% endif %}></td>
-                                            <td><input type="number" step="0.01" name="backup_base_fee_workstation_{{ plan.id }}" value="{{ '%.2f'|format(plan.backup_base_fee_workstation|float) }}" class="form-group__input" {% if user.permission_level != 'admin' %}readonly{% endif %}></td>
-                                            <td><input type="number" step="0.01" name="backup_base_fee_server_{{ plan.id }}" value="{{ '%.2f'|format(plan.backup_base_fee_server|float) }}" class="form-group__input" {% if user.permission_level != 'admin' %}readonly{% endif %}></td>
-                                            <td><input type="number" step="0.1" name="backup_included_tb_{{ plan.id }}" value="{{ '%.1f'|format(plan.backup_included_tb|float) }}" class="form-group__input" {% if user.permission_level != 'admin' %}readonly{% endif %}></td>
-                                            <td><input type="number" step="0.01" name="backup_per_tb_fee_{{ plan.id }}" value="{{ '%.2f'|format(plan.backup_per_tb_fee|float) }}" class="form-group__input" {% if user.permission_level != 'admin' %}readonly{% endif %}></td>
+                                            <td><input type="number" step="0.01" name="per_user_cost_{{ plan.id }}" value="{{ '%.2f'|format(plan.per_user_cost|float) }}" {% if user.permission_level != 'admin' %}readonly{% endif %}></td>
+                                            <td><input type="number" step="0.01" name="per_workstation_cost_{{ plan.id }}" value="{{ '%.2f'|format(plan.per_workstation_cost|float) }}" {% if user.permission_level != 'admin' %}readonly{% endif %}></td>
+                                            <td><input type="number" step="0.01" name="per_server_cost_{{ plan.id }}" value="{{ '%.2f'|format(plan.per_server_cost|float) }}" {% if user.permission_level != 'admin' %}readonly{% endif %}></td>
+                                            <td><input type="number" step="0.01" name="per_vm_cost_{{ plan.id }}" value="{{ '%.2f'|format(plan.per_vm_cost|float) }}" {% if user.permission_level != 'admin' %}readonly{% endif %}></td>
+                                            <td><input type="number" step="0.01" name="per_switch_cost_{{ plan.id }}" value="{{ '%.2f'|format(plan.per_switch_cost|float) }}" {% if user.permission_level != 'admin' %}readonly{% endif %}></td>
+                                            <td><input type="number" step="0.01" name="per_firewall_cost_{{ plan.id }}" value="{{ '%.2f'|format(plan.per_firewall_cost|float) }}" {% if user.permission_level != 'admin' %}readonly{% endif %}></td>
+                                            <td><input type="number" step="0.01" name="per_hour_ticket_cost_{{ plan.id }}" value="{{ '%.2f'|format(plan.per_hour_ticket_cost|float) }}" {% if user.permission_level != 'admin' %}readonly{% endif %}></td>
+                                            <td><input type="number" step="0.01" name="backup_base_fee_workstation_{{ plan.id }}" value="{{ '%.2f'|format(plan.backup_base_fee_workstation|float) }}" {% if user.permission_level != 'admin' %}readonly{% endif %}></td>
+                                            <td><input type="number" step="0.01" name="backup_base_fee_server_{{ plan.id }}" value="{{ '%.2f'|format(plan.backup_base_fee_server|float) }}" {% if user.permission_level != 'admin' %}readonly{% endif %}></td>
+                                            <td><input type="number" step="0.1" name="backup_included_tb_{{ plan.id }}" value="{{ '%.1f'|format(plan.backup_included_tb|float) }}" {% if user.permission_level != 'admin' %}readonly{% endif %}></td>
+                                            <td><input type="number" step="0.01" name="backup_per_tb_fee_{{ plan.id }}" value="{{ '%.2f'|format(plan.backup_per_tb_fee|float) }}" {% if user.permission_level != 'admin' %}readonly{% endif %}></td>
                                         </tr>
                                         {% endfor %}
                                     </tbody>
@@ -185,12 +185,10 @@
                                     <tbody>
                                         {% for plan in plans %}
                                         <tr class="term-row-{{ plan_name | replace(' ', '_') }}" data-term="{{ plan.term_length }}">
-                                            <td>
-                                                <span class="badge badge--info">{{ plan.term_length }}</span>
-                                            </td>
+                                            <td>{{ plan.term_length }}</td>
                                             {% for feature_type in feature_types %}
                                             <td>
-                                                <select name="feature_{{ feature_type.lower().replace(' ', '_') }}_{{ plan.id }}" class="form-group__input" {% if user.permission_level != 'admin' %}disabled{% endif %}>
+                                                <select name="feature_{{ feature_type.lower().replace(' ', '_') }}_{{ plan.id }}" {% if user.permission_level != 'admin' %}disabled{% endif %}>
                                                     {% for option in feature_options[feature_type] %}
                                                     <option value="{{ option.display_name }}" {% if plan.feature_dict.get(feature_type, 'Not Included') == option.display_name %}selected{% endif %}>{{ option.display_name }}</option>
                                                     {% endfor %}
