@@ -235,7 +235,11 @@ def update_freshservice():
     config_path = os.path.join(current_app.instance_path, 'codex.conf')
     config = configparser.RawConfigParser()
     config.read(config_path)
-    
+
+    # Ensure section exists
+    if not config.has_section('freshservice'):
+        config.add_section('freshservice')
+
     domain = request.form.get('fs_domain')
     web_domain = request.form.get('fs_web_domain')
     api_key = request.form.get('fs_api_key')
@@ -263,6 +267,10 @@ def update_datto():
     config_path = os.path.join(current_app.instance_path, 'codex.conf')
     config = configparser.RawConfigParser()
     config.read(config_path)
+
+    # Ensure section exists
+    if not config.has_section('datto'):
+        config.add_section('datto')
 
     api_endpoint = request.form.get('datto_endpoint')
     public_key = request.form.get('datto_public_key')
@@ -320,6 +328,10 @@ def update_psa_provider():
     config_path = os.path.join(current_app.instance_path, 'codex.conf')
     config = configparser.RawConfigParser()
     config.read(config_path)
+
+    # Ensure section exists
+    if not config.has_section('psa'):
+        config.add_section('psa')
 
     provider = request.form.get('default_provider')
 
