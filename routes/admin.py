@@ -231,12 +231,18 @@ def settings():
 @admin_bp.route('/update-freshservice', methods=['POST'])
 @admin_required
 def update_freshservice():
-    """Update Freshservice configuration."""
+    """
+    Update Freshservice configuration.
+
+    LEGACY: Freshservice uses [freshservice] section.
+    New PSA providers should use [psa.{provider}] format (e.g., [psa.superops]).
+    This will be removed when migrating away from Freshservice.
+    """
     config_path = os.path.join(current_app.instance_path, 'codex.conf')
     config = configparser.RawConfigParser()
     config.read(config_path)
 
-    # Ensure section exists
+    # Ensure section exists (legacy format)
     if not config.has_section('freshservice'):
         config.add_section('freshservice')
 
@@ -295,12 +301,17 @@ def update_datto():
 @admin_bp.route('/update-superops', methods=['POST'])
 @admin_required
 def update_superops():
-    """Update Superops configuration."""
+    """
+    Update Superops configuration.
+
+    STANDARD: All new PSA providers use [psa.{provider}] format.
+    This is the correct pattern for modular PSA providers.
+    """
     config_path = os.path.join(current_app.instance_path, 'codex.conf')
     config = configparser.RawConfigParser()
     config.read(config_path)
 
-    # Ensure section exists
+    # Ensure section exists (standard PSA format)
     if not config.has_section('psa.superops'):
         config.add_section('psa.superops')
 
@@ -324,12 +335,17 @@ def update_superops():
 @admin_bp.route('/update-psa-provider', methods=['POST'])
 @admin_required
 def update_psa_provider():
-    """Update default PSA provider."""
+    """
+    Update default PSA provider.
+
+    PSA Framework: [psa] section controls which provider is active.
+    Individual provider configs are in [psa.{provider}] or legacy [freshservice].
+    """
     config_path = os.path.join(current_app.instance_path, 'codex.conf')
     config = configparser.RawConfigParser()
     config.read(config_path)
 
-    # Ensure section exists
+    # Ensure section exists (PSA framework settings)
     if not config.has_section('psa'):
         config.add_section('psa')
 
