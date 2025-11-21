@@ -386,7 +386,7 @@ def api_get_all_companies_bulk():
                 tickets = query.all()
 
             company_data['tickets'] = [{
-                'ticket_id': t.ticket_id,
+                'ticket_id': t.id,
                 'ticket_number': t.ticket_number,
                 'subject': t.subject,
                 'description': t.description,
@@ -526,7 +526,7 @@ def api_get_company_tickets(account_number):
 
     import json
     return jsonify([{
-        'ticket_id': t.ticket_id,
+        'ticket_id': t.id,
         'ticket_number': t.ticket_number,
         'subject': t.subject,
         'description': t.description,
@@ -845,7 +845,7 @@ def api_list_tickets():
 
     return jsonify({
         'tickets': [{
-            'id': t.ticket_id,
+            'id': t.id,
             'ticket_number': t.ticket_number,
             'subject': t.subject,
             'description_text': t.description_text,
