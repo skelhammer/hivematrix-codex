@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, g, request, redirect, url_for, jsonify
+from flask import Blueprint, render_template, g, request, redirect, url_for, jsonify, current_app
 from app.auth import token_required
 from models import Company, BillingPlan, PlanFeature, Location, CompanyFeatureOverride, FeatureOption, db
 from sqlalchemy import asc, desc
@@ -346,4 +346,5 @@ def update_company(account_number):
         return jsonify({'success': True, 'message': 'Company updated successfully'})
     except Exception as e:
         db.session.rollback()
-        return jsonify({'error': str(e)}), 500
+        current_app.logger.error(f"Failed to update company: {e}")
+        return jsonify({'error': 'Internal server error'}), 500

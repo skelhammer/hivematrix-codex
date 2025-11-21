@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, g, request, jsonify
+from flask import Blueprint, render_template, g, request, jsonify, current_app
 from app.auth import token_required
 from models import Contact, db
 from sqlalchemy import asc, desc
@@ -262,4 +262,5 @@ def update_contact(contact_id):
 
     except Exception as e:
         db.session.rollback()
-        return jsonify({'success': False, 'error': str(e)}), 500
+        current_app.logger.error(f"Failed to update contact: {e}")
+        return jsonify({'success': False, 'error': 'Internal server error'}), 500

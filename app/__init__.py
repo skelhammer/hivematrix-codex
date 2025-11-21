@@ -72,6 +72,17 @@ except FileNotFoundError:
 from extensions import db
 db.init_app(app)
 
+# Initialize Flask-Limiter for rate limiting
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
+
+limiter = Limiter(
+    app=app,
+    key_func=get_remote_address,
+    default_limits=["200 per hour", "50 per minute"],
+    storage_uri="memory://"
+)
+
 # Apply ProxyFix to handle X-Forwarded headers from Nexus proxy
 from werkzeug.middleware.proxy_fix import ProxyFix
 app.wsgi_app = ProxyFix(
@@ -107,9 +118,16 @@ helm_logger = init_helm_logger(
 
 # Keycloak configuration for agent management
 app.config['KEYCLOAK_SERVER_URL'] = os.environ.get('KEYCLOAK_SERVER_URL', 'http://localhost:8080')
+app.config['KEYCLOAK_BACKEND_URL'] = os.environ.get('KEYCLOAK_BACKEND_URL', 'http://localhost:8080')
 app.config['KEYCLOAK_REALM'] = os.environ.get('KEYCLOAK_REALM', 'hivematrix')
 app.config['KEYCLOAK_ADMIN_USER'] = os.environ.get('KEYCLOAK_ADMIN_USER', 'admin')
 app.config['KEYCLOAK_ADMIN_PASS'] = os.environ.get('KEYCLOAK_ADMIN_PASS', 'admin')
+
+# SSL Verification Settings
+# In development: Allow self-signed certificates (verify=False)
+# In production: Always verify SSL certificates (verify=True)
+environment = os.environ.get('ENVIRONMENT', 'development')
+app.config['VERIFY_SSL'] = (environment == 'production')
 
 from app.version import VERSION, SERVICE_NAME as VERSION_SERVICE_NAME
 

@@ -13,8 +13,14 @@ from models import Agent
 
 
 def get_keycloak_admin_token():
-    """Get admin token for Keycloak API calls"""
-    keycloak_url = app.config.get('KEYCLOAK_SERVER_URL', 'http://localhost:8080')
+    """
+    Get admin token for Keycloak API calls.
+
+    Uses KEYCLOAK_BACKEND_URL for direct server-to-server communication,
+    avoiding SSL verification issues with self-signed certificates.
+    """
+    # Use backend URL for direct server-to-server calls (no SSL issues)
+    keycloak_url = app.config.get('KEYCLOAK_BACKEND_URL', 'http://localhost:8080')
 
     # Use admin credentials from config or environment
     admin_user = app.config.get('KEYCLOAK_ADMIN_USER', 'admin')
@@ -22,13 +28,16 @@ def get_keycloak_admin_token():
 
     token_url = f"{keycloak_url}/realms/master/protocol/openid-connect/token"
 
+    # Get SSL verification setting (for development with self-signed certs)
+    verify_ssl = app.config.get('VERIFY_SSL', True)
+
     try:
         response = http_requests.post(token_url, data={
             'client_id': 'admin-cli',
             'username': admin_user,
             'password': admin_pass,
             'grant_type': 'password'
-        }, timeout=5)
+        }, verify=verify_ssl, timeout=5)
 
         if response.status_code == 200:
             return response.json().get('access_token')
@@ -68,19 +77,25 @@ def sync_agents_from_keycloak():
     """
     Sync agents from Keycloak into Codex database.
     Creates/updates agents, preserving their Codex-specific settings.
+
+    Uses KEYCLOAK_BACKEND_URL for direct server-to-server communication.
     """
     token = get_keycloak_admin_token()
     if not token:
         return {'error': 'Failed to authenticate with Keycloak'}, 500
 
-    keycloak_url = app.config.get('KEYCLOAK_SERVER_URL', 'http://localhost:8080')
+    # Use backend URL for server-to-server admin API calls
+    keycloak_url = app.config.get('KEYCLOAK_BACKEND_URL', 'http://localhost:8080')
     realm = app.config.get('KEYCLOAK_REALM', 'hivematrix')
 
     users_url = f"{keycloak_url}/admin/realms/{realm}/users"
     headers = {'Authorization': f'Bearer {token}'}
 
+    # Get SSL verification setting
+    verify_ssl = app.config.get('VERIFY_SSL', True)
+
     try:
-        response = http_requests.get(users_url, headers=headers, timeout=10)
+        response = http_requests.get(users_url, headers=headers, verify=verify_ssl, timeout=10)
 
         if response.status_code != 200:
             return {'error': 'Failed to fetch users from Keycloak'}, response.status_code
@@ -129,7 +144,7 @@ def sync_agents_from_keycloak():
                 synced += 1
 
             except Exception as e:
-                errors.append(f"Error syncing user {kc_user.get('username')}: {str(e)}")
+                errors.append(f"Error syncing user {kc_user.get('username')}")
                 app.logger.error(f"Error syncing user {kc_user.get('username')}: {e}")
 
         # Commit all changes
@@ -147,7 +162,7 @@ def sync_agents_from_keycloak():
     except Exception as e:
         db.session.rollback()
         app.logger.error(f"Failed to sync agents: {e}")
-        return {'error': f'Failed to sync agents: {str(e)}'}, 500
+        return {'error': 'Internal server error'}, 500
 
 
 # ============================================================
@@ -212,7 +227,7 @@ def update_agent_settings(keycloak_id):
     except Exception as e:
         db.session.rollback()
         app.logger.error(f"Failed to update agent settings: {e}")
-        return {'error': f'Failed to update settings: {str(e)}'}, 500
+        return {'error': 'Internal server error'}, 500
 
 
 # ============================================================
@@ -316,7 +331,7 @@ def update_my_settings():
     except Exception as e:
         db.session.rollback()
         app.logger.error(f"Failed to update user settings: {e}")
-        return {'error': f'Failed to update settings: {str(e)}'}, 500
+        return {'error': 'Internal server error'}, 500
 
 
 # ============================================================

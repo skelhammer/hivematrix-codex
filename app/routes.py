@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 from flask import render_template, g, jsonify, request
-from app import app
+from app import app, limiter
 from .auth import token_required, admin_required
 from models import Company, Contact, Asset, Location, TicketDetail, SyncJob, BillingPlan, PlanFeature, FeatureOption, PSAAgent
 from extensions import db
@@ -144,9 +144,10 @@ def sync_psa():
             'message': f'{provider.title()} sync started in background'
         })
     except Exception as e:
+        app.logger.error(f"PSA sync failed: {e}")
         return jsonify({
             'success': False,
-            'error': str(e)
+            'error': 'Internal server error'
         }), 500
 
 
@@ -180,9 +181,10 @@ def sync_datto():
             'message': 'Datto RMM sync started in background (will auto-push account numbers)'
         })
     except Exception as e:
+        app.logger.error(f"Datto sync failed: {e}")
         return jsonify({
             'success': False,
-            'error': str(e)
+            'error': 'Internal server error'
         }), 500
 
 @app.route('/sync/status/<job_id>', methods=['GET'])
@@ -239,9 +241,10 @@ def sync_create_account_numbers():
             'message': 'Account number creation started in background'
         })
     except Exception as e:
+        app.logger.error(f"Account number creation failed: {e}")
         return jsonify({
             'success': False,
-            'error': str(e)
+            'error': 'Internal server error'
         }), 500
 
 @app.route('/sync/push-to-datto', methods=['POST'])
@@ -273,9 +276,10 @@ def sync_push_to_datto():
             'message': 'Push to Datto started in background'
         })
     except Exception as e:
+        app.logger.error(f"Push to Datto failed: {e}")
         return jsonify({
             'success': False,
-            'error': str(e)
+            'error': 'Internal server error'
         }), 500
 
 
@@ -575,9 +579,10 @@ def sync_tickets():
             'message': f'{provider.title()} ticket sync started in background'
         })
     except Exception as e:
+        app.logger.error(f"Ticket sync failed: {e}")
         return jsonify({
             'success': False,
-            'error': str(e)
+            'error': 'Internal server error'
         }), 500
 
 
@@ -616,9 +621,10 @@ def sync_tickets_full_history():
             'message': f'{provider.title()} full history ticket sync started in background'
         })
     except Exception as e:
+        app.logger.error(f"Full history ticket sync failed: {e}")
         return jsonify({
             'success': False,
-            'error': str(e)
+            'error': 'Internal server error'
         }), 500
 
 
@@ -635,10 +641,14 @@ def sync_keycloak_agents():
 
             try:
                 # Get Keycloak admin token
-                keycloak_url = app.config.get('KEYCLOAK_SERVER_URL', 'http://localhost:8080')
+                # Use KEYCLOAK_BACKEND_URL for direct server-to-server communication
+                keycloak_url = app.config.get('KEYCLOAK_BACKEND_URL', 'http://localhost:8080')
                 admin_user = app.config.get('KEYCLOAK_ADMIN_USER', 'admin')
                 admin_pass = app.config.get('KEYCLOAK_ADMIN_PASS', 'admin')
                 realm = app.config.get('KEYCLOAK_REALM', 'hivematrix')
+
+                # Get SSL verification setting (for development with self-signed certs)
+                verify_ssl = app.config.get('VERIFY_SSL', True)
 
                 token_url = f"{keycloak_url}/realms/master/protocol/openid-connect/token"
 
@@ -650,7 +660,7 @@ def sync_keycloak_agents():
                     'username': admin_user,
                     'password': admin_pass,
                     'grant_type': 'password'
-                }, timeout=5)
+                }, verify=verify_ssl, timeout=5)
 
                 if response.status_code != 200:
                     raise Exception(f"Failed to get Keycloak admin token: {response.status_code}")
@@ -662,7 +672,7 @@ def sync_keycloak_agents():
                 users_url = f"{keycloak_url}/admin/realms/{realm}/users"
                 headers = {'Authorization': f'Bearer {token}'}
 
-                response = http_requests.get(users_url, headers=headers, timeout=10)
+                response = http_requests.get(users_url, headers=headers, verify=verify_ssl, timeout=10)
 
                 if response.status_code != 200:
                     raise Exception(f"Failed to fetch users from Keycloak: {response.status_code}")
@@ -765,9 +775,10 @@ def sync_keycloak_agents():
             'message': 'Keycloak agent sync started in background'
         })
     except Exception as e:
+        app.logger.error(f"Keycloak agent sync failed: {e}")
         return jsonify({
             'success': False,
-            'error': str(e)
+            'error': 'Internal server error'
         }), 500
 
 
@@ -894,7 +905,8 @@ def api_active_tickets():
     FR_SLA_WARNING_HOURS = 12
 
     # Closed/resolved statuses to exclude from active tickets
-    CLOSED_STATUSES = ['closed', 'resolved', 'job_complete_bill', 'billing_complete']
+    # Includes spam/deleted tickets that may still be in database
+    CLOSED_STATUSES = ['closed', 'resolved', 'job_complete_bill', 'billing_complete', 'spam', 'trash', 'deleted']
 
     # Load agent mapping from database (all providers)
     agent_mapping = {}
@@ -1274,9 +1286,10 @@ def api_update_ticket(ticket_id):
         })
     except Exception as e:
         db.session.rollback()
+        app.logger.error(f"Failed to update ticket: {e}")
         return jsonify({
             'success': False,
-            'error': str(e)
+            'error': 'Internal server error'
         }), 500
 
 
@@ -1393,6 +1406,7 @@ def api_get_device(device_id):
 
 @app.route('/health', methods=['GET'])
 @app.route('/api/health', methods=['GET'])
+@limiter.exempt
 def health_check():
     """Health check endpoint for monitoring"""
     return {
@@ -1455,10 +1469,15 @@ def api_get_psa_config():
     config_file = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'instance', 'codex.conf')
 
     providers = {}
+    default_provider = None
 
     try:
         config = configparser.ConfigParser()
         config.read(config_file)
+
+        # Get default provider from PSA section
+        if config.has_section('psa'):
+            default_provider = config.get('psa', 'default_provider', fallback='freshservice')
 
         # Freshservice config
         if config.has_section('freshservice'):
@@ -1482,9 +1501,10 @@ def api_get_psa_config():
             }
 
     except Exception as e:
-        return jsonify({'providers': {}, 'error': str(e)})
+        app.logger.error(f"Failed to get PSA config: {e}")
+        return jsonify({'providers': {}, 'error': 'Internal server error'})
 
-    return jsonify({'providers': providers})
+    return jsonify({'providers': providers, 'default_provider': default_provider})
 
 
 @app.route('/api/psa/tickets', methods=['GET'])
