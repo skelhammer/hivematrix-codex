@@ -35,7 +35,7 @@ class SuperopsProvider(PSAProvider):
         """
         super().__init__(config)
 
-        # TODO: Load credentials from config when API docs available
+        # NOTE: Credentials loading not implemented (see main TODO list - waiting on API docs)
         # try:
         #     self.api_url = config.get('psa.superops', 'api_url')
         #     self.api_key = config.get('psa.superops', 'api_key')
@@ -101,17 +101,17 @@ class SuperopsProvider(PSAProvider):
 
     def get_ticket_url(self, external_id: int) -> str:
         """Get URL to view ticket in Superops."""
-        # TODO: Implement when URL structure is known
+        # NOTE: URL structure not confirmed (see main TODO list - waiting on API docs)
         return f"https://app.superops.com/tickets/{external_id}"
 
     def get_company_url(self, external_id: int) -> str:
         """Get URL to view company in Superops."""
-        # TODO: Implement when URL structure is known
+        # NOTE: URL structure not confirmed (see main TODO list - waiting on API docs)
         return f"https://app.superops.com/companies/{external_id}"
 
     def get_contact_url(self, external_id: int) -> str:
         """Get URL to view contact in Superops."""
-        # TODO: Implement when URL structure is known
+        # NOTE: URL structure not confirmed (see main TODO list - waiting on API docs)
         return f"https://app.superops.com/contacts/{external_id}"
 
     # ========== Status/Priority Mapping ==========

@@ -51,7 +51,7 @@ STATUS_DISPLAY_NAMES = {
         'pending_hubspot': 'Pending Hubspot',
     },
     'superops': {
-        # TODO: Add Superops display names when implemented
+        # NOTE: Superops mappings not implemented (see main TODO list - waiting on API docs)
     },
 }
 
@@ -73,7 +73,7 @@ PRIORITY_DISPLAY_NAMES = {
         'urgent': 'Urgent',
     },
     'superops': {
-        # TODO: Add Superops priority names when implemented
+        # NOTE: Superops mappings not implemented (see main TODO list - waiting on API docs)
     },
 }
 
@@ -98,7 +98,7 @@ STATUS_MAPPINGS = {
         27: 'pending_hubspot',       # Pending Hubspot
     },
     'superops': {
-        # TODO: Add Superops status mappings when API documentation is available
+        # NOTE: Superops mappings not implemented (see main TODO list - waiting on API docs)
         # Example structure:
         # 'new': 'open',
         # 'in_progress': 'pending',
@@ -118,7 +118,7 @@ PRIORITY_MAPPINGS = {
         4: 'urgent',
     },
     'superops': {
-        # TODO: Add Superops priority mappings when API documentation is available
+        # NOTE: Superops mappings not implemented (see main TODO list - waiting on API docs)
         # Example structure:
         # 'low': 'low',
         # 'normal': 'medium',
@@ -138,7 +138,7 @@ STATUS_REVERSE_MAPPINGS = {
         'on_hold': 23,
     },
     'superops': {
-        # TODO: Add when API documentation is available
+        # NOTE: Superops mappings not implemented (see main TODO list - waiting on API docs)
     },
 }
 
@@ -150,7 +150,7 @@ PRIORITY_REVERSE_MAPPINGS = {
         'urgent': 4,
     },
     'superops': {
-        # TODO: Add when API documentation is available
+        # NOTE: Superops mappings not implemented (see main TODO list - waiting on API docs)
     },
 }
 
@@ -163,7 +163,7 @@ GROUP_MAPPINGS = {
         # Add more groups as needed
     },
     'superops': {
-        # TODO: Add when API documentation is available
+        # NOTE: Superops mappings not implemented (see main TODO list - waiting on API docs)
     },
 }
 
