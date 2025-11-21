@@ -257,14 +257,14 @@ def get_my_settings():
         return jsonify({
             'theme_preference': 'light',
             'knowledgetree_view_preference': 'grid',
-            'home_page_preference': 'helm',
+            'home_page_preference': 'beacon',
             'synced': False
         })
 
     return jsonify({
         'theme_preference': agent.theme_preference,
         'knowledgetree_view_preference': agent.knowledgetree_view_preference,
-        'home_page_preference': agent.home_page_preference or 'helm',
+        'home_page_preference': agent.home_page_preference or 'beacon',
         'username': agent.username,
         'email': agent.email,
         'synced': True
@@ -312,7 +312,7 @@ def update_my_settings():
     # Update home page preference
     if 'home_page_preference' in data:
         home_page = data['home_page_preference']
-        valid_pages = ['helm', 'codex', 'beacon', 'ledger', 'brainhair']
+        valid_pages = ['beacon', 'knowledgetree', 'brainhair', 'codex', 'ledger', 'archive', 'helm']
         if home_page not in valid_pages:
             return {'error': f'Invalid home page. Must be one of: {", ".join(valid_pages)}'}, 400
         agent.home_page_preference = home_page
@@ -371,24 +371,24 @@ def get_user_theme():
 def get_user_home_page():
     """
     Get user's home page preference.
-    This endpoint is called by Nexus to determine where to redirect after login.
+    This endpoint is called by Core to determine where to redirect after login.
     Requires service token authentication.
     """
     # Get email from query params
     user_email = request.args.get('email')
 
     if not user_email:
-        # Default to helm if no user email
-        return jsonify({'home_page': 'helm', 'source': 'default'})
+        # Default to beacon if no user email
+        return jsonify({'home_page': 'beacon', 'source': 'default'})
 
     agent = Agent.query.filter_by(email=user_email).first()
 
     if not agent:
         # Agent not synced yet, return default
-        return jsonify({'home_page': 'helm', 'source': 'default'})
+        return jsonify({'home_page': 'beacon', 'source': 'default'})
 
     return jsonify({
-        'home_page': agent.home_page_preference or 'helm',
+        'home_page': agent.home_page_preference or 'beacon',
         'source': 'codex',
         'email': agent.email
     })
