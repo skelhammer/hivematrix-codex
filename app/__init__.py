@@ -124,10 +124,10 @@ app.config['KEYCLOAK_ADMIN_USER'] = os.environ.get('KEYCLOAK_ADMIN_USER', 'admin
 app.config['KEYCLOAK_ADMIN_PASS'] = os.environ.get('KEYCLOAK_ADMIN_PASS', 'admin')
 
 # SSL Verification Settings
-# In development: Allow self-signed certificates (verify=False)
-# In production: Always verify SSL certificates (verify=True)
-environment = os.environ.get('ENVIRONMENT', 'development')
-app.config['VERIFY_SSL'] = (environment == 'production')
+# Default to False for self-signed certificates (common in HiveMatrix deployments)
+# Can be overridden by setting VERIFY_SSL=True in .flaskenv if needed
+verify_ssl_env = os.environ.get('VERIFY_SSL', 'False')
+app.config['VERIFY_SSL'] = verify_ssl_env.lower() in ('true', '1', 'yes')
 
 from app.version import VERSION, SERVICE_NAME as VERSION_SERVICE_NAME
 
