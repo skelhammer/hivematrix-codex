@@ -99,6 +99,9 @@ FLASK_ENV=development
 SERVICE_NAME=codex
 CORE_SERVICE_URL=http://localhost:5000
 HELM_SERVICE_URL=http://localhost:5004
+
+# SSL Configuration (disable for self-signed certs)
+VERIFY_SSL=False
 EOF
     echo -e "${GREEN}✓ Minimal .flaskenv created${NC}"
     echo -e "${YELLOW}  (Helm will regenerate with full config after setup)${NC}"
