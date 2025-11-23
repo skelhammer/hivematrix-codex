@@ -293,7 +293,7 @@ def update_company(account_number):
 
     # Update all editable fields
     editable_fields = [
-        'name', 'description', 'billing_plan', 'support_level',
+        'name', 'description', 'compliance_level', 'billing_plan', 'support_level',
         'email_system', 'phone_system', 'contract_term_length',
         'managed_users', 'managed_devices', 'managed_network',
         'company_main_number', 'address', 'datto_portal_url', 'domains',

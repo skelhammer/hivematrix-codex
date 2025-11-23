@@ -22,6 +22,9 @@ class Company(db.Model):
     # PSA system configuration
     psa_provider = db.Column(db.String(50), default='freshservice')  # 'freshservice', 'superops', etc.
 
+    # Compliance level for data filtering
+    compliance_level = db.Column(db.String(20), default='standard')  # 'standard', 'cjis', 'phi'
+
     # External PSA system identifier (generic - works with any PSA)
     external_id = db.Column(BigInteger, unique=True, nullable=True)
     external_source = db.Column(db.String(50), default='freshservice')  # Which PSA this ID came from
