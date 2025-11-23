@@ -1714,15 +1714,90 @@ def api_update_ticket(ticket_id):
 @app.route('/api/rmm/devices', methods=['GET'])
 @token_required
 def api_list_rmm_devices():
-    """
-    List all devices from RMM system (vendor-agnostic).
+    """List all devices from RMM system (vendor-agnostic).
+    ---
+    tags:
+      - RMM
+      - Devices
+    summary: List all devices from RMM provider
+    description: |
+      Retrieves all devices from the configured RMM system (Datto, SuperOps, etc.).
+      Vendor-agnostic endpoint that works with any RMM provider configured in Codex.
 
-    Works with any RMM provider (Datto, SuperOps, etc.) configured in Codex.
-
-    Query parameters:
-        company_id: Filter by company account number
-        status: Filter by status ('online', 'offline')
-        limit: Maximum number of devices to return (default 100)
+      Device data is synced from RMM providers and includes hardware inventory,
+      operating system information, and online status.
+    security:
+      - Bearer: []
+    parameters:
+      - name: company_id
+        in: query
+        type: string
+        required: false
+        description: Filter by company account number
+        example: "965"
+      - name: status
+        in: query
+        type: string
+        required: false
+        description: Filter by device status
+        enum: ['online', 'offline']
+        example: "online"
+      - name: limit
+        in: query
+        type: integer
+        required: false
+        description: Maximum number of devices to return
+        default: 100
+        example: 50
+    responses:
+      200:
+        description: List of devices retrieved successfully
+        schema:
+          type: object
+          properties:
+            devices:
+              type: array
+              items:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    example: "device-123"
+                    description: Device ID (format device-{asset_id})
+                  name:
+                    type: string
+                    example: "WORKSTATION-001"
+                  company_id:
+                    type: string
+                    example: "965"
+                  company_name:
+                    type: string
+                    example: "Acme Corporation"
+                  status:
+                    type: string
+                    enum: ['online', 'offline']
+                    example: "online"
+                  os:
+                    type: string
+                    example: "Windows 11 Pro"
+                  device_type:
+                    type: string
+                    example: "Workstation"
+                  ip_address:
+                    type: string
+                    example: "192.168.1.100"
+                  last_seen:
+                    type: string
+                    format: date-time
+                    example: "2025-11-23T12:00:00Z"
+                  last_logged_in_user:
+                    type: string
+                    example: "jsmith"
+            count:
+              type: integer
+              example: 42
+      401:
+        description: Unauthorized - Invalid or missing JWT token
     """
     # Get query parameters
     company_id = request.args.get('company_id')
@@ -1764,12 +1839,142 @@ def api_list_rmm_devices():
 @app.route('/api/rmm/device/<device_id>', methods=['GET'])
 @token_required
 def api_get_rmm_device(device_id):
-    """
-    Get detailed information about a specific device (vendor-agnostic).
+    """Get detailed information about a specific device (vendor-agnostic).
+    ---
+    tags:
+      - RMM
+      - Devices
+    summary: Get device details from RMM provider
+    description: |
+      Retrieves detailed information about a specific device from the RMM system.
+      Vendor-agnostic endpoint that works with any RMM provider configured in Codex.
 
-    Works with any RMM provider (Datto, SuperOps, etc.) configured in Codex.
+      Includes hardware specs, installed software, health metrics, and status information.
 
-    Device ID format: "device-{asset_id}"
+      Device ID format: device-{asset_id} (e.g., device-123)
+    security:
+      - Bearer: []
+    parameters:
+      - name: device_id
+        in: path
+        type: string
+        required: true
+        description: Device ID in format device-{asset_id}
+        example: "device-123"
+    responses:
+      200:
+        description: Device details retrieved successfully
+        schema:
+          type: object
+          properties:
+            id:
+              type: string
+              example: "device-123"
+            name:
+              type: string
+              example: "WORKSTATION-001"
+            company_id:
+              type: string
+              example: "965"
+            company_name:
+              type: string
+              example: "Acme Corporation"
+            status:
+              type: string
+              enum: ['online', 'offline']
+              example: "online"
+            os:
+              type: string
+              example: "Windows 11 Pro"
+            os_version:
+              type: string
+              example: "10.0.22631"
+            device_type:
+              type: string
+              example: "Workstation"
+            ip_address:
+              type: string
+              example: "192.168.1.100"
+            mac_address:
+              type: string
+              example: "XX:XX:XX:XX:XX:XX"
+              description: Masked for privacy
+            last_seen:
+              type: string
+              format: date-time
+              example: "2025-11-23T12:00:00Z"
+            last_logged_in_user:
+              type: string
+              example: "jsmith"
+            domain:
+              type: string
+              example: "ACMECORP"
+            antivirus:
+              type: string
+              example: "Datto EDR"
+            patch_status:
+              type: string
+              example: "Up to Date"
+            last_reboot:
+              type: string
+              format: date-time
+              example: "2025-11-20T08:00:00Z"
+            installed_software:
+              type: array
+              items:
+                type: object
+                properties:
+                  name:
+                    type: string
+                    example: "Microsoft Office"
+                  version:
+                    type: string
+                    example: "16.0"
+            hardware:
+              type: object
+              properties:
+                cpu:
+                  type: string
+                  example: "Intel Core i7"
+                ram_gb:
+                  type: integer
+                  example: 16
+                disk_gb:
+                  type: integer
+                  example: 512
+            health:
+              type: object
+              properties:
+                cpu_usage:
+                  type: integer
+                  example: 15
+                  description: CPU usage percentage
+                ram_usage:
+                  type: integer
+                  example: 45
+                  description: RAM usage percentage
+                disk_usage:
+                  type: integer
+                  example: 60
+                  description: Disk usage percentage
+      400:
+        description: Invalid device ID format
+        schema:
+          type: object
+          properties:
+            error:
+              type: string
+              example: "Invalid device ID format"
+      404:
+        description: Device not found
+        schema:
+          type: object
+          properties:
+            error:
+              type: string
+              example: "Device not found"
+      401:
+        description: Unauthorized - Invalid or missing JWT token
     """
     # Extract asset ID from device ID
     if not device_id.startswith('device-'):
