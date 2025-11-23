@@ -485,7 +485,85 @@ def api_get_all_companies_bulk():
 @app.route('/api/companies/<account_number>')
 @token_required
 def api_get_company(account_number):
-    """Get single company by account number - used by Ledger service."""
+    """Get single company by account number - used by Ledger service.
+    ---
+    tags:
+      - Companies
+    summary: Get company by account number
+    description: |
+      Retrieves detailed information for a single company identified by account number.
+      Used by Ledger service for billing operations and by other services for company lookups.
+    security:
+      - Bearer: []
+    parameters:
+      - name: account_number
+        in: path
+        type: string
+        required: true
+        description: The company's account number (primary key)
+        example: "12345"
+    responses:
+      200:
+        description: Company details retrieved successfully
+        schema:
+          type: object
+          properties:
+            account_number:
+              type: string
+              example: "12345"
+            name:
+              type: string
+              example: "Acme Corporation"
+            description:
+              type: string
+              example: "Technology consulting firm"
+            billing_plan:
+              type: string
+              example: "per_user"
+            contract_term_length:
+              type: integer
+              example: 12
+            contract_start_date:
+              type: string
+              format: date
+              example: "2024-01-01"
+            contract_end_date:
+              type: string
+              format: date
+              example: "2024-12-31"
+            support_level:
+              type: string
+              example: "Standard"
+            profit_or_non_profit:
+              type: string
+              example: "profit"
+            company_main_number:
+              type: string
+              example: "+1-555-123-4567"
+            company_start_date:
+              type: string
+              format: date
+              example: "2024-01-01"
+            domains:
+              type: string
+              example: "acme.com, acmecorp.net"
+            phone_system:
+              type: string
+              example: "VoIP"
+            email_system:
+              type: string
+              example: "Microsoft 365"
+      404:
+        description: Company not found
+        schema:
+          type: object
+          properties:
+            error:
+              type: string
+              example: "Company not found"
+      401:
+        description: Unauthorized - Invalid or missing JWT token
+    """
     company = Company.query.get(account_number)
     if not company:
         return {'error': 'Company not found'}, 404
@@ -511,7 +589,89 @@ def api_get_company(account_number):
 @app.route('/api/companies/<account_number>/assets')
 @token_required
 def api_get_company_assets(account_number):
-    """Get all assets for a company - used by Ledger service."""
+    """Get all assets for a company - used by Ledger service.
+    ---
+    tags:
+      - Companies
+      - Assets
+    summary: Get all assets for a company
+    description: |
+      Retrieves all assets (computers, devices) associated with a specific company.
+      Used by Ledger for user count billing and by other services for asset management.
+
+      Assets are synced from RMM systems (Datto) and include hardware/software inventory.
+    security:
+      - Bearer: []
+    parameters:
+      - name: account_number
+        in: path
+        type: string
+        required: true
+        description: The company's account number
+        example: "12345"
+    responses:
+      200:
+        description: List of assets retrieved successfully
+        schema:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: integer
+                example: 42
+              hostname:
+                type: string
+                example: "DESKTOP-ABC123"
+              hardware_type:
+                type: string
+                example: "Desktop"
+              operating_system:
+                type: string
+                example: "Windows 11 Pro"
+              device_type:
+                type: string
+                example: "Workstation"
+              last_logged_in_user:
+                type: string
+                example: "jsmith"
+              antivirus_product:
+                type: string
+                example: "Windows Defender"
+              ext_ip_address:
+                type: string
+                example: "203.0.113.45"
+              int_ip_address:
+                type: string
+                example: "192.168.1.100"
+              domain:
+                type: string
+                example: "ACME"
+              online:
+                type: boolean
+                example: true
+              last_seen:
+                type: string
+                format: date-time
+                example: "2025-11-22T10:30:00Z"
+              backup_usage_tb:
+                type: number
+                format: float
+                example: 0.5
+              backup_data_bytes:
+                type: integer
+                example: 549755813888
+      404:
+        description: Company not found
+        schema:
+          type: object
+          properties:
+            error:
+              type: string
+              example: "Company not found"
+      401:
+        description: Unauthorized - Invalid or missing JWT token
+    """
     company = Company.query.get(account_number)
     if not company:
         return {'error': 'Company not found'}, 404
@@ -538,7 +698,73 @@ def api_get_company_assets(account_number):
 @app.route('/api/companies/<account_number>/contacts')
 @token_required
 def api_get_company_contacts(account_number):
-    """Get all contacts for a company - used by Ledger service."""
+    """Get all contacts for a company - used by Ledger service.
+    ---
+    tags:
+      - Companies
+      - Contacts
+    summary: Get all contacts for a company
+    description: |
+      Retrieves all contacts (employees, users) associated with a specific company.
+      Used by Ledger for per-user billing calculations and by other services for contact lookups.
+
+      Contacts are synced from PSA systems and include employment information.
+    security:
+      - Bearer: []
+    parameters:
+      - name: account_number
+        in: path
+        type: string
+        required: true
+        description: The company's account number
+        example: "12345"
+    responses:
+      200:
+        description: List of contacts retrieved successfully
+        schema:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: integer
+                example: 42
+              name:
+                type: string
+                example: "John Smith"
+              email:
+                type: string
+                format: email
+                example: "jsmith@acme.com"
+              title:
+                type: string
+                example: "IT Manager"
+              employment_type:
+                type: string
+                example: "Full Time"
+              active:
+                type: boolean
+                example: true
+              mobile_phone_number:
+                type: string
+                example: "+1-555-123-4567"
+              work_phone_number:
+                type: string
+                example: "+1-555-987-6543"
+              secondary_emails:
+                type: string
+                example: "john.smith@acme.com, j.smith@acme.com"
+      404:
+        description: Company not found
+        schema:
+          type: object
+          properties:
+            error:
+              type: string
+              example: "Company not found"
+      401:
+        description: Unauthorized - Invalid or missing JWT token
+    """
     company = Company.query.get(account_number)
     if not company:
         return {'error': 'Company not found'}, 404
@@ -879,15 +1105,122 @@ def get_last_sync(script_name):
 @app.route('/api/tickets', methods=['GET'])
 @token_required
 def api_list_tickets():
-    """
-    List all tickets with optional filtering.
+    """List all tickets with optional filtering - used by Beacon dashboard.
+    ---
+    tags:
+      - Tickets
+    summary: List all tickets with filtering and pagination
+    description: |
+      Retrieves tickets from PSA system with optional filtering by company, status, and priority.
+      Used by Beacon service for real-time ticket dashboard display.
 
-    Query parameters:
-        company_id: Filter by company account number
-        status: Filter by status
-        priority: Filter by priority
-        limit: Maximum number of tickets to return (default 50)
-        offset: Number of tickets to skip (for pagination)
+      Tickets are synced from PSA systems and updated periodically.
+    security:
+      - Bearer: []
+    parameters:
+      - name: company_id
+        in: query
+        type: string
+        required: false
+        description: Filter by company account number
+        example: "12345"
+      - name: status
+        in: query
+        type: string
+        required: false
+        description: Filter by ticket status
+        example: "Open"
+      - name: priority
+        in: query
+        type: string
+        required: false
+        description: Filter by ticket priority
+        example: "High"
+      - name: limit
+        in: query
+        type: integer
+        required: false
+        default: 50
+        description: Maximum number of tickets to return
+        example: 50
+      - name: offset
+        in: query
+        type: integer
+        required: false
+        default: 0
+        description: Number of tickets to skip for pagination
+        example: 0
+    responses:
+      200:
+        description: List of tickets retrieved successfully
+        schema:
+          type: object
+          properties:
+            tickets:
+              type: array
+              items:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                    example: 42
+                  ticket_number:
+                    type: string
+                    example: "TKT-12345"
+                  subject:
+                    type: string
+                    example: "Cannot access email"
+                  description_text:
+                    type: string
+                    example: "User reports unable to login to Outlook"
+                  status:
+                    type: string
+                    example: "Open"
+                  priority:
+                    type: string
+                    example: "Medium"
+                  company_id:
+                    type: string
+                    example: "12345"
+                  requester_email:
+                    type: string
+                    format: email
+                    example: "jsmith@acme.com"
+                  requester_name:
+                    type: string
+                    example: "John Smith"
+                  created_at:
+                    type: string
+                    format: date-time
+                    example: "2025-11-22T09:00:00Z"
+                  last_updated_at:
+                    type: string
+                    format: date-time
+                    example: "2025-11-22T10:30:00Z"
+                  closed_at:
+                    type: string
+                    format: date-time
+                    example: null
+                  total_hours_spent:
+                    type: number
+                    format: float
+                    example: 1.5
+            count:
+              type: integer
+              description: Number of tickets returned in this response
+              example: 10
+            total:
+              type: integer
+              description: Total number of tickets matching the filter
+              example: 145
+            offset:
+              type: integer
+              example: 0
+            limit:
+              type: integer
+              example: 50
+      401:
+        description: Unauthorized - Invalid or missing JWT token
     """
     import json
 
