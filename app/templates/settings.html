@@ -1,12 +1,8 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>User Settings - Codex</title>
-    <script src="https://unpkg.com/lucide@latest"></script>
-</head>
-<body>
+{% extends "layout.html" %}
+
+{% block title %}User Settings{% endblock %}
+
+{% block content %}
     {# Toast container for notifications #}
     <div class="toast-container" id="toast-container"></div>
 
@@ -104,10 +100,12 @@
             </div>
         </div>
     </div>
+{% endblock %}
 
-    <script>
-        // Toast notification functions
-        function dismissToast(toast) {
+{% block scripts %}
+<script>
+    // Toast notification functions
+    function dismissToast(toast) {
             toast.classList.add('toast--hiding');
             setTimeout(() => toast.remove(), 300);
         }
@@ -234,14 +232,10 @@
             }
         }
 
-        // Load settings on page load
-        window.addEventListener('DOMContentLoaded', () => {
-            loadSettings();
-            lucide.createIcons();
-        });
-    </script>
-    <div class="version-footer">
-        <span class="version-footer__text">{{ app_service_name }} v{{ app_version }}</span>
-    </div>
-</body>
-</html>
+    // Load settings on page load
+    window.addEventListener('DOMContentLoaded', () => {
+        loadSettings();
+        lucide.createIcons();
+    });
+</script>
+{% endblock %}
