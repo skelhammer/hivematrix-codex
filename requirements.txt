@@ -9,3 +9,4 @@ psycopg2-binary
 waitress
 beautifulsoup4==4.12.2
 APScheduler==3.10.4
+flasgger==0.9.7.1
