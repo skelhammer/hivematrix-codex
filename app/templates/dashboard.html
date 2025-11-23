@@ -1,13 +1,9 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Codex Dashboard</title>
-    <script src="https://unpkg.com/lucide@latest"></script>
-</head>
-<body>
-    <div class="card">
+{% extends "layout.html" %}
+
+{% block title %}Codex Dashboard{% endblock %}
+
+{% block content %}
+<div class="card">
         <div class="card__header">
             <div>
                 <h1 class="card__title u-mb-0">Codex - Data Platform</h1>
@@ -79,9 +75,11 @@
             </div>
         </div>
     </div>
+{% endblock %}
 
-    <script>
-        async function loadAgentCount() {
+{% block scripts %}
+<script>
+    async function loadAgentCount() {
             try {
                 const basePath = window.location.pathname.startsWith('/codex/') ? '/codex' : '';
                 const response = await fetch(`${basePath}/api/agents`);
@@ -100,14 +98,9 @@
             }
         }
 
-        // Load agent count and initialize Lucide icons
+        // Load agent count on page load
         window.addEventListener('DOMContentLoaded', () => {
             loadAgentCount();
-            lucide.createIcons();
         });
-    </script>
-    <div class="version-footer">
-        <span class="version-footer__text">{{ app_service_name }} v{{ app_version }}</span>
-    </div>
-</body>
-</html>
+</script>
+{% endblock %}
