@@ -69,7 +69,7 @@ def get_db_credentials(config):
     if config.has_section('database_credentials'):
         db_details['host'] = config.get('database_credentials', 'db_host', fallback=db_details['host'])
         db_details['port'] = config.get('database_credentials', 'db_port', fallback=db_details['port'])
-        db_details['dbname'] = config.get('database_credentials', 'db_dbname', fallback=db_details['dbname'])
+        db_details['dbname'] = config.get('database_credentials', 'db_name', fallback=db_details['dbname'])
         db_details['user'] = config.get('database_credentials', 'db_user', fallback=db_details['user'])
 
     host = input(f"Host [{db_details['host']}]: ") or db_details['host']
@@ -380,7 +380,7 @@ def init_db_headless(db_host, db_port, db_name, db_user, db_password, migrate_on
         config.add_section('database_credentials')
     config.set('database_credentials', 'db_host', db_host)
     config.set('database_credentials', 'db_port', db_port)
-    config.set('database_credentials', 'db_dbname', db_name)
+    config.set('database_credentials', 'db_name', db_name)
     config.set('database_credentials', 'db_user', db_user)
 
     # Add default PSA configuration if not present
