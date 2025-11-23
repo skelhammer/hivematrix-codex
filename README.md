@@ -35,8 +35,8 @@ Codex is the "rolodex" of HiveMatrix - it aggregates data from external systems 
 
 ## Integrations
 
-- **PSA Systems** - Ticket and agent sync via `sync_psa.py`
-- **Datto RMM** - Asset sync via `pull_datto_rmm.py`
+- **PSA Systems** - Ticket and agent sync via `sync_psa.py` (vendor-agnostic: Freshservice, SuperOps)
+- **RMM Systems** - Asset sync via `sync_rmm.py` (vendor-agnostic: Datto RMM, SuperOps RMM)
 
 ## Environment Variables
 

@@ -83,6 +83,18 @@ db_user = codex_user
 
 [psa]
 default_provider = freshservice
+
+[rmm]
+default_provider = datto
+
+[scheduler]
+sync_psa_enabled = true
+sync_rmm_enabled = true
+sync_tickets_enabled = true
+sync_psa_schedule = daily
+sync_rmm_schedule = daily
+sync_tickets_schedule = frequent
+sync_run_on_startup = false
 EOF
     echo -e "${GREEN}✓ Database config created${NC}"
     echo -e "${YELLOW}  (Update instance/codex.conf with your database credentials)${NC}"
@@ -126,7 +138,7 @@ echo "  2. Or configure manually: python init_db.py"
 echo ""
 echo "After first start:"
 echo "  • Access Codex via Nexus dashboard"
-echo "  • Configure PSA/Datto integrations (optional)"
+echo "  • Configure PSA/RMM integrations (optional)"
 echo "    - Edit instance/codex.conf for API keys"
-echo "    - Run sync scripts: sync_psa.py, pull_datto.py"
+echo "    - Run sync scripts: sync_psa.py, sync_rmm.py"
 echo ""

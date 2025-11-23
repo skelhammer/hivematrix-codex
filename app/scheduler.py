@@ -259,11 +259,11 @@ def init_scheduler(app):
     with app.app_context():
         # Get schedule settings from config
         psa_enabled = app.config.get('SYNC_PSA_ENABLED', True)
-        datto_enabled = app.config.get('SYNC_DATTO_ENABLED', True)
+        rmm_enabled = app.config.get('SYNC_RMM_ENABLED', True)
         tickets_enabled = app.config.get('SYNC_TICKETS_ENABLED', True)
 
         psa_schedule = app.config.get('SYNC_PSA_SCHEDULE', 'daily')
-        datto_schedule = app.config.get('SYNC_DATTO_SCHEDULE', 'daily')
+        rmm_schedule = app.config.get('SYNC_RMM_SCHEDULE', 'daily')
         tickets_schedule = app.config.get('SYNC_TICKETS_SCHEDULE', 'frequent')
 
         # Get default PSA provider name for logging
@@ -290,26 +290,26 @@ def init_scheduler(app):
                 )
                 logger.info(f"Scheduled {psa_provider} sync: Every hour")
 
-        # Schedule Datto RMM sync (assets & backup)
-        if datto_enabled:
-            if datto_schedule == 'daily':
+        # Schedule RMM sync (assets & backup)
+        if rmm_enabled:
+            if rmm_schedule == 'daily':
                 scheduler.add_job(
-                    func=lambda: run_sync_script('pull_datto.py'),
+                    func=lambda: run_sync_script('sync_rmm.py'),
                     trigger=CronTrigger(hour=3, minute=0),  # 3:00 AM daily
-                    id='datto_sync',
-                    name='Sync Datto RMM (Assets & Backup)',
+                    id='rmm_sync',
+                    name='Sync RMM (Assets & Backup)',
                     replace_existing=True
                 )
-                logger.info("Scheduled Datto sync: Daily at 3:00 AM")
-            elif datto_schedule == 'hourly':
+                logger.info("Scheduled RMM sync: Daily at 3:00 AM")
+            elif rmm_schedule == 'hourly':
                 scheduler.add_job(
-                    func=lambda: run_sync_script('pull_datto.py'),
+                    func=lambda: run_sync_script('sync_rmm.py'),
                     trigger=IntervalTrigger(hours=1),
-                    id='datto_sync',
-                    name='Sync Datto RMM (Assets & Backup)',
+                    id='rmm_sync',
+                    name='Sync RMM (Assets & Backup)',
                     replace_existing=True
                 )
-                logger.info("Scheduled Datto sync: Every hour")
+                logger.info("Scheduled RMM sync: Every hour")
 
         # Schedule Tickets sync (uses PSA provider system)
         if tickets_enabled:
@@ -358,10 +358,10 @@ def init_scheduler(app):
                 )
             if datto_enabled:
                 scheduler.add_job(
-                    func=lambda: run_sync_script('pull_datto.py'),
+                    func=lambda: run_sync_script('sync_rmm.py'),
                     trigger='date',  # Run once immediately
                     id='datto_startup',
-                    name='Startup Datto Sync',
+                    name='Startup RMM Sync',
                     replace_existing=True
                 )
 

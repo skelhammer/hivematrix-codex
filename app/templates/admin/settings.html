@@ -42,19 +42,19 @@
                     <button class="btn btn--primary" onclick="syncPSA()" id="sync-psa-btn">
                         <span class="btn__label">
                             <i data-lucide="clipboard-list" class="btn__icon"></i>
-                            Sync {{ psa_config.default_provider | title }}
+                            Sync PSA
                         </span>
                     </button>
                     <button class="btn btn--primary" onclick="syncTickets()" id="sync-tickets-btn">
                         <span class="btn__label">
                             <i data-lucide="ticket" class="btn__icon"></i>
-                            Sync {{ psa_config.default_provider | title }} Tickets
+                            Sync PSA Tickets
                         </span>
                     </button>
                     <button class="btn btn--primary" onclick="syncTicketsFullHistory()" id="sync-tickets-history-btn">
                         <span class="btn__label">
                             <i data-lucide="history" class="btn__icon"></i>
-                            {{ psa_config.default_provider | title }} Full History
+                            Sync PSA Full History
                         </span>
                     </button>
                     <button class="btn btn--primary" onclick="createAccountNumbers()" id="create-acct-btn">
@@ -69,18 +69,18 @@
             <div class="section-divider"></div>
 
             <div class="u-my-2">
-                <h3 class="u-mt-0">Datto RMM Sync</h3>
+                <h3 class="u-mt-0">RMM Sync{% if rmm_config.default_provider %} ({{ rmm_config.default_provider | title }}){% endif %}</h3>
                 <div class="u-flex u-flex-gap u-flex-wrap">
-                    <button class="btn btn--primary" onclick="syncDatto()" id="sync-datto-btn">
+                    <button class="btn btn--primary" onclick="syncRMM()" id="sync-rmm-btn">
                         <span class="btn__label">
                             <i data-lucide="monitor" class="btn__icon"></i>
-                            Sync Datto RMM
+                            Sync RMM
                         </span>
                     </button>
                     <button class="btn btn--primary" onclick="pushToDatto()" id="push-datto-btn">
                         <span class="btn__label">
                             <i data-lucide="upload" class="btn__icon"></i>
-                            Push Account Numbers to Datto RMM
+                            Push Account Numbers to RMM
                         </span>
                     </button>
                 </div>
@@ -250,7 +250,7 @@
                     <em>Note: Changing the provider requires a Codex restart for scheduler changes to take effect.</em>
                 </p>
                 <button type="submit" class="btn btn--primary u-mt-2">
-                    <span class="btn__label">Set Active Provider</span>
+                    <span class="btn__label">Set Active PSA Provider</span>
                 </button>
             </form>
 
@@ -368,6 +368,43 @@
 
     <div class="card">
         <div class="card__header">
+            <h2 class="card__title">RMM Provider Selection</h2>
+        </div>
+        <div class="card__body">
+            <p>Select which RMM (Remote Monitoring and Management) system Codex should use for syncing assets and devices.</p>
+
+            <form method="POST" action="{{ url_for('admin.update_rmm_provider') }}" class="form">
+                <div class="form__group">
+                    <label for="rmm_default_provider" class="form__label">Active RMM Provider:</label>
+                    <select id="rmm_default_provider" name="default_provider" class="form__select">
+                        <option value="datto" {% if rmm_config.default_provider == 'datto' %}selected{% endif %}>
+                            Datto RMM
+                        </option>
+                        <option value="superops" {% if rmm_config.default_provider == 'superops' %}selected{% endif %}>
+                            SuperOps RMM
+                        </option>
+                    </select>
+                </div>
+                <p class="u-text-small u-text-secondary u-mt-1">
+                    <em>Note: Changing the provider requires a Codex restart for scheduler changes to take effect.</em>
+                </p>
+                <button type="submit" class="btn btn--primary u-mt-2">
+                    <span class="btn__label">Set Active RMM Provider</span>
+                </button>
+            </form>
+
+            <div class="u-mt-2">
+                <strong>Current Provider:</strong>
+                <span class="badge badge--{% if rmm_config.default_provider == 'datto' %}primary{% else %}info{% endif %}">
+                    {{ rmm_config.default_provider | title }}
+                </span>
+            </div>
+        </div>
+    </div>
+
+    {% if rmm_config.default_provider == 'datto' %}
+    <div class="card">
+        <div class="card__header">
             <h2 class="card__title">Datto RMM Integration</h2>
         </div>
         <div class="card__body">
@@ -437,6 +474,39 @@
             </form>
         </div>
     </div>
+    {% endif %}
+
+    {% if rmm_config.default_provider == 'superops' %}
+    <div class="card">
+        <div class="card__header">
+            <h2 class="card__title">SuperOps RMM Integration</h2>
+        </div>
+        <div class="card__body">
+            <div class="info-message u-mb-2">
+                <strong>Note:</strong> SuperOps RMM integration is not yet implemented. This is a placeholder for future use.
+            </div>
+            <table>
+                <tbody>
+                    <tr>
+                        <td><strong>API Key:</strong></td>
+                        <td>
+                            <span class="status-text status-text--warning">Not configured</span>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><strong>Region:</strong></td>
+                        <td>
+                            <span class="status-text status-text--warning">Not configured</span>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3>Update SuperOps RMM Configuration</h3>
+            <p class="u-text-secondary u-text-small">Configuration form will be available when SuperOps RMM provider is implemented.</p>
+        </div>
+    </div>
+    {% endif %}
 
     <div class="card">
         <div class="card__header">
@@ -457,10 +527,10 @@
                     </span>
                 </div>
                 <div class="info-item">
-                    <span class="info-item__label">Datto RMM Sync:</span>
+                    <span class="info-item__label">RMM Sync{% if rmm_config.default_provider %} ({{ rmm_config.default_provider | title }}){% endif %}:</span>
                     <span class="info-item__value">
-                        {% if scheduler_config.datto_enabled %}
-                            <span class="badge badge--success">Enabled</span> ({{ scheduler_config.datto_schedule }})
+                        {% if scheduler_config.rmm_enabled %}
+                            <span class="badge badge--success">Enabled</span> ({{ scheduler_config.rmm_schedule }})
                         {% else %}
                             <span class="badge badge--danger">Disabled</span>
                         {% endif %}
@@ -517,13 +587,16 @@
             <pre><code>[psa]
 default_provider = freshservice  # or superops
 
+[rmm]
+default_provider = datto  # or superops
+
 [scheduler]
 sync_psa_enabled = true
-sync_datto_enabled = true
+sync_rmm_enabled = true  # RMM sync (applies to active provider)
 sync_tickets_enabled = true
-sync_psa_schedule = daily  # daily or hourly
-sync_datto_schedule = daily
-sync_tickets_schedule = frequent    # frequent (3 min), hourly, or daily
+sync_psa_schedule = daily  # Options: daily, hourly
+sync_rmm_schedule = daily  # Options: daily, hourly
+sync_tickets_schedule = frequent  # Options: frequent (3 min), hourly, daily
 sync_run_on_startup = false</code></pre>
         </div>
     </div>
@@ -767,17 +840,17 @@ sync_run_on_startup = false</code></pre>
             startSync(
                 '{{ url_for("sync_psa") }}',
                 'sync-psa-btn',
-                'Sync {{ psa_config.default_provider | title }}',
-                '{{ psa_config.default_provider | title }}'
+                'Sync PSA',
+                'PSA'
             );
         }
 
-        function syncDatto() {
+        function syncRMM() {
             startSync(
                 '{{ url_for("sync_datto") }}',
-                'sync-datto-btn',
-                'Sync Datto RMM',
-                'Datto RMM'
+                'sync-rmm-btn',
+                'Sync RMM',
+                'RMM'
             );
         }
 
@@ -785,8 +858,8 @@ sync_run_on_startup = false</code></pre>
             startSync(
                 '{{ url_for("sync_tickets") }}',
                 'sync-tickets-btn',
-                'Sync {{ psa_config.default_provider | title }} Tickets',
-                '{{ psa_config.default_provider | title }} Tickets'
+                'Sync PSA Tickets',
+                'PSA Tickets'
             );
         }
 
@@ -797,8 +870,8 @@ sync_run_on_startup = false</code></pre>
             startSync(
                 '{{ url_for("sync_tickets_full_history") }}',
                 'sync-tickets-history-btn',
-                '{{ psa_config.default_provider | title }} Full History',
-                '{{ psa_config.default_provider | title }} Tickets Full History'
+                'Sync PSA Full History',
+                'PSA Full History'
             );
         }
 
@@ -815,8 +888,8 @@ sync_run_on_startup = false</code></pre>
             startSync(
                 '{{ url_for("sync_push_to_datto") }}',
                 'push-datto-btn',
-                'Push Account Numbers to Datto RMM',
-                'Push to Datto'
+                'Push Account Numbers to RMM',
+                'Push to RMM'
             );
         }
 

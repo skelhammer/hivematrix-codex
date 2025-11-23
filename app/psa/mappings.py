@@ -12,12 +12,48 @@ Normalized Status Values:
 - 'on_hold' - Temporarily paused
 - 'resolved' - Solution provided, awaiting confirmation
 - 'closed' - Ticket completed
+- 'spam' - Spam ticket (should be deleted)
+- 'deleted' - Deleted ticket (should be deleted)
+- 'trash' - Trashed ticket (should be deleted)
 
 Normalized Priority Values:
 - 'low' - No rush, handle when available
 - 'medium' - Normal priority
 - 'high' - Needs attention soon
 - 'urgent' - Critical, needs immediate attention
+
+=============================================================================
+FRESHSERVICE STATUS IDs - Complete Reference
+=============================================================================
+This instance uses the following Freshservice status IDs:
+
+STANDARD STATUSES:
+  2  = Open
+  3  = Pending
+  4  = Resolved
+  5  = Closed
+
+INVALID STATUSES (Deleted from Codex):
+  6  = Spam
+  7  = Deleted
+
+CUSTOM STATUSES (Instance-specific):
+  8  = Scheduled
+  9  = Waiting on Customer
+  10 = Waiting on Third Party
+  13 = Under Investigation
+  15 = Job Complete - Bill
+  16 = Billing Complete - Close
+  19 = Update Needed
+  23 = On Hold
+  26 = Customer Replied
+  27 = Pending Hubspot
+
+NOTE: Status IDs 6 and 7 need verification from your Freshservice instance.
+      Check Admin → Ticket Fields → Status to confirm these IDs.
+
+Active ticket query in Freshservice uses: [2, 3, 8, 9, 10, 13, 19, 23, 26, 27]
+=============================================================================
 """
 
 # Common/universal display names for standard statuses
@@ -39,6 +75,9 @@ STATUS_DISPLAY_NAMES = {
         'pending': 'Pending',
         'resolved': 'Resolved',
         'closed': 'Closed',
+        'spam': 'Spam',
+        'deleted': 'Deleted',
+        'trash': 'Trash',
         'scheduled': 'Scheduled',
         'waiting_customer': 'Waiting on Customer',
         'waiting_third_party': 'Waiting on Third Party',
@@ -85,6 +124,9 @@ STATUS_MAPPINGS = {
         3: 'pending',
         4: 'resolved',
         5: 'closed',
+        # Invalid/spam statuses (should be deleted from Codex)
+        6: 'spam',                   # Spam
+        7: 'deleted',                # Deleted
         # Custom statuses
         8: 'scheduled',              # Scheduled
         9: 'waiting_customer',       # Waiting on Customer
@@ -166,6 +208,23 @@ GROUP_MAPPINGS = {
         # NOTE: Superops mappings not implemented (see main TODO list - waiting on API docs)
     },
 }
+
+# =============================================================================
+# Invalid Status Configuration (Vendor-Specific)
+# =============================================================================
+# These status IDs represent spam/deleted/trash tickets that should be
+# removed from Codex during sync. Each PSA provider may have different IDs
+# for these invalid statuses.
+
+# Provider-specific invalid status IDs (PSA status_id values)
+INVALID_STATUS_IDS = {
+    'freshservice': [6, 7],  # 6=spam, 7=deleted (verify these IDs!)
+    'superops': [],          # TODO: Add when implementing Superops
+}
+
+# Normalized status names that indicate invalid tickets
+# These are the normalized values that STATUS_MAPPINGS converts invalid IDs to
+INVALID_STATUS_NAMES = ['spam', 'deleted', 'trash']
 
 
 def map_status(provider: str, native_status) -> str:

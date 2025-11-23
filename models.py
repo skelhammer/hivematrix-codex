@@ -69,7 +69,7 @@ class Company(db.Model):
     contacts = db.relationship('Contact', secondary=contact_company_link, back_populates='companies')
     feature_overrides = db.relationship('CompanyFeatureOverride', back_populates='company', lazy='dynamic', cascade="all, delete-orphan")
     locations = db.relationship('Location', back_populates='company', lazy=True, cascade="all, delete-orphan")
-    datto_site_links = db.relationship('DattoSiteLink', back_populates='company', lazy=True, cascade="all, delete-orphan")
+    rmm_site_links = db.relationship('RMMSiteLink', back_populates='company', lazy=True, cascade="all, delete-orphan")
 
 class Asset(db.Model):
     __tablename__ = 'assets'
@@ -79,7 +79,7 @@ class Asset(db.Model):
     hardware_type = db.Column(db.String(100))
     operating_system = db.Column(db.String(100))
     last_logged_in_user = db.Column(db.String(150))
-    datto_site_name = db.Column(db.String(150))
+    rmm_site_name = db.Column(db.String(150))
     antivirus_product = db.Column(db.String(100))
     description = db.Column(db.Text)
     ext_ip_address = db.Column(db.String(50))
@@ -214,13 +214,22 @@ class Location(db.Model):
 
     company = db.relationship('Company', back_populates='locations')
 
-class DattoSiteLink(db.Model):
-    __tablename__ = 'datto_site_links'
+class RMMSiteLink(db.Model):
+    """
+    Links companies to RMM provider sites (Datto, SuperOps, etc.).
+    Vendor-agnostic design allows supporting multiple RMM providers.
+    """
+    __tablename__ = 'rmm_site_links'
     id = db.Column(db.Integer, primary_key=True)
     company_account_number = db.Column(db.String(50), db.ForeignKey('companies.account_number'), nullable=False)
-    datto_site_uid = db.Column(db.String(100), unique=True, nullable=False)
+    rmm_site_uid = db.Column(db.String(100), nullable=False)
+    rmm_provider = db.Column(db.String(50), nullable=False, default='datto')  # 'datto', 'superops', etc.
 
-    company = db.relationship('Company', back_populates='datto_site_links')
+    company = db.relationship('Company', back_populates='rmm_site_links')
+
+    __table_args__ = (
+        db.UniqueConstraint('rmm_site_uid', 'rmm_provider', name='unique_rmm_site'),
+    )
 
 class PSAAgent(db.Model):
     """

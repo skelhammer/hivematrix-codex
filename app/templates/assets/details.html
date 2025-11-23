@@ -77,8 +77,8 @@
                     <p class="u-mb-1"><strong>External IP:</strong> {{ asset.ext_ip_address or 'N/A' }}</p>
                     <p class="u-mb-1"><strong>Domain:</strong> {{ asset.domain or 'N/A' }}</p>
                     <p class="u-mb-1"><strong>Last Logged In User:</strong> {{ asset.last_logged_in_user or 'N/A' }}</p>
-                    {% if asset.datto_site_name %}
-                    <p class="u-mb-1"><strong>Datto Site:</strong> {{ asset.datto_site_name }}</p>
+                    {% if asset.rmm_site_name %}
+                    <p class="u-mb-1"><strong>RMM Site:</strong> {{ asset.rmm_site_name }}</p>
                     {% endif %}
                     {% if asset.patch_status %}
                     <p class="u-mb-1"><strong>Patch Status:</strong> {{ asset.patch_status }}</p>

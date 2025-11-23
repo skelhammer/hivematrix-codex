@@ -1,6 +1,6 @@
 from flask import Blueprint, render_template, g, request, redirect, url_for, flash, current_app
 from app.auth import admin_required
-from models import db, Company, Contact, Asset, Location, DattoSiteLink, CompanyFeatureOverride, TicketDetail, SyncJob, Agent, contact_company_link, asset_contact_link
+from models import db, Company, Contact, Asset, Location, RMMSiteLink, CompanyFeatureOverride, TicketDetail, SyncJob, Agent, contact_company_link, asset_contact_link
 import configparser
 import os
 from datetime import datetime, timezone
@@ -144,6 +144,11 @@ def settings():
         'enabled_providers': config.get('psa', 'enabled_providers', fallback='freshservice').split(','),
     }
 
+    # Get RMM configuration
+    rmm_config = {
+        'default_provider': config.get('rmm', 'default_provider', fallback='datto'),
+    }
+
     db_config = {
         'host': config.get('database_credentials', 'db_host', fallback='Unknown'),
         'port': config.get('database_credentials', 'db_port', fallback='Unknown'),
@@ -154,10 +159,10 @@ def settings():
     # Get scheduler configuration
     scheduler_config = {
         'psa_enabled': current_app.config.get('SYNC_PSA_ENABLED', True),
-        'datto_enabled': current_app.config.get('SYNC_DATTO_ENABLED', True),
+        'rmm_enabled': current_app.config.get('SYNC_RMM_ENABLED', True),
         'tickets_enabled': current_app.config.get('SYNC_TICKETS_ENABLED', False),
         'psa_schedule': current_app.config.get('SYNC_PSA_SCHEDULE', 'daily'),
-        'datto_schedule': current_app.config.get('SYNC_DATTO_SCHEDULE', 'daily'),
+        'rmm_schedule': current_app.config.get('SYNC_RMM_SCHEDULE', 'daily'),
         'tickets_schedule': current_app.config.get('SYNC_TICKETS_SCHEDULE', 'hourly'),
         'run_on_startup': current_app.config.get('SYNC_RUN_ON_STARTUP', False),
         'default_provider': current_app.config.get('PSA_DEFAULT_PROVIDER', 'freshservice'),
@@ -220,6 +225,7 @@ def settings():
                          user=g.user,
                          stats=stats,
                          psa_config=psa_config,
+                         rmm_config=rmm_config,
                          fs_config=fs_config,
                          superops_config=superops_config,
                          datto_config=datto_config,
@@ -367,6 +373,40 @@ def update_psa_provider():
 
     return redirect(url_for('admin.settings'))
 
+@admin_bp.route('/update-rmm-provider', methods=['POST'])
+@admin_required
+def update_rmm_provider():
+    """
+    Update default RMM provider.
+
+    RMM Framework: [rmm] section controls which provider is active.
+    Individual provider configs are in [datto], [superops], etc.
+    """
+    config_path = os.path.join(current_app.instance_path, 'codex.conf')
+    config = configparser.RawConfigParser()
+    config.read(config_path)
+
+    # Ensure section exists (RMM framework settings)
+    if not config.has_section('rmm'):
+        config.add_section('rmm')
+
+    provider = request.form.get('default_provider')
+
+    if provider in ['datto', 'superops']:
+        config.set('rmm', 'default_provider', provider)
+
+        with open(config_path, 'w') as f:
+            config.write(f)
+
+        # Reload config in app
+        current_app.config['CODEX_CONFIG'] = config
+
+        flash(f'Default RMM provider changed to {provider.title()}. Restart Codex for scheduler changes to take effect.', 'success')
+    else:
+        flash('Invalid RMM provider selected', 'error')
+
+    return redirect(url_for('admin.settings'))
+
 @admin_bp.route('/clear-data', methods=['POST'])
 @admin_required
 def clear_data():
@@ -380,7 +420,7 @@ def clear_data():
             db.session.execute(contact_company_link.delete())
             # Delete related tables in order (foreign keys)
             TicketDetail.query.delete()
-            DattoSiteLink.query.delete()
+            RMMSiteLink.query.delete()
             Location.query.delete()
             CompanyFeatureOverride.query.delete()
             Asset.query.delete()
@@ -427,7 +467,7 @@ def clear_data():
 
             # Delete in proper order (respecting all foreign keys)
             TicketDetail.query.delete()
-            DattoSiteLink.query.delete()
+            RMMSiteLink.query.delete()
             Location.query.delete()
             CompanyFeatureOverride.query.delete()
             Asset.query.delete()

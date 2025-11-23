@@ -535,6 +535,7 @@ def save_agents(agents: list, provider_name: str) -> int:
 def save_tickets(tickets: list, provider_name: str) -> int:
     """
     Save normalized ticket data to database.
+    Deletes tickets with spam/deleted/trash status.
 
     Args:
         tickets: List of normalized ticket dicts from provider
@@ -543,6 +544,8 @@ def save_tickets(tickets: list, provider_name: str) -> int:
     Returns:
         Number of tickets saved/updated
     """
+    from app.psa.mappings import INVALID_STATUS_NAMES
+
     # Build company mapping (external_id -> account_number)
     company_map = {}
     companies = Company.query.filter_by(external_source=provider_name).all()
@@ -551,10 +554,15 @@ def save_tickets(tickets: list, provider_name: str) -> int:
             company_map[company.external_id] = company.account_number
 
     count = 0
+    deleted_count = 0
+
     for ticket_data in tickets:
         external_id = ticket_data.get('external_id')
         if not external_id:
             continue
+
+        # Get normalized status (mapped from status_id by provider)
+        status = ticket_data.get('status', '').lower()
 
         # Find existing ticket
         ticket = TicketDetail.query.filter_by(
@@ -562,6 +570,17 @@ def save_tickets(tickets: list, provider_name: str) -> int:
             external_source=provider_name
         ).first()
 
+        # If ticket is spam/deleted/trash, delete it from Codex
+        # The status is already normalized from status_id by the provider
+        if status in INVALID_STATUS_NAMES:
+            if ticket:
+                log(f"  Deleting ticket #{ticket_data.get('ticket_number')} - status: {status} (status_id: {ticket_data.get('status_id')})")
+                db.session.delete(ticket)
+                deleted_count += 1
+            # Skip creating/updating this ticket
+            continue
+
+        # Create or update valid ticket
         if not ticket:
             ticket = TicketDetail()
             db.session.add(ticket)
@@ -618,6 +637,10 @@ def save_tickets(tickets: list, provider_name: str) -> int:
         count += 1
 
     db.session.commit()
+
+    if deleted_count > 0:
+        log(f"  Deleted {deleted_count} spam/deleted/trash tickets from Codex")
+
     return count
 
 

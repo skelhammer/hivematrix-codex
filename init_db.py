@@ -23,6 +23,7 @@ import os
 import sys
 import argparse
 import configparser
+import subprocess
 from getpass import getpass
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import sessionmaker
@@ -46,7 +47,7 @@ def _import_app():
         # Import ALL models so SQLAlchemy knows about them
         from models import (
             Company, Contact, Asset, CompanyFeatureOverride, Location,
-            DattoSiteLink, TicketDetail, SyncJob, BillingPlan, FeatureOption, Agent
+            RMMSiteLink, TicketDetail, SyncJob, BillingPlan, FeatureOption, Agent
         )
         app = flask_app
         db = database
@@ -87,10 +88,36 @@ def get_db_credentials(config):
 
 
 def test_db_connection(creds):
-    """Tests the database connection."""
+    """Tests the database connection, automatically creating database if needed."""
     from urllib.parse import quote_plus
 
-    # Properly escape the password in case it contains special characters
+    # First check if database exists using psql (more reliable than SQLAlchemy connection attempt)
+    check_cmd = f"sudo -u postgres psql -tAc \"SELECT 1 FROM pg_database WHERE datname='{creds['dbname']}'\""
+    try:
+        result = subprocess.run(check_cmd, shell=True, capture_output=True, text=True, timeout=5)
+        db_exists = "1" in result.stdout
+    except Exception:
+        # If check fails, assume database doesn't exist and try to create it
+        db_exists = False
+
+    # Create database if it doesn't exist
+    if not db_exists:
+        print(f"\n→ Database '{creds['dbname']}' does not exist. Creating it...")
+        create_cmd = f"sudo -u postgres psql -c \"CREATE DATABASE {creds['dbname']} OWNER {creds['user']};\""
+        try:
+            result = subprocess.run(create_cmd, shell=True, capture_output=True, text=True, timeout=10)
+            if result.returncode == 0:
+                print(f"✓ Database '{creds['dbname']}' created successfully!")
+            else:
+                print(f"\n✗ Failed to create database: {result.stderr}", file=sys.stderr)
+                print(f"  You may need to create it manually:")
+                print(f"  sudo -u postgres psql -c \"CREATE DATABASE {creds['dbname']} OWNER {creds['user']};\"")
+                return None, False
+        except Exception as e:
+            print(f"\n✗ Failed to create database: {e}", file=sys.stderr)
+            return None, False
+
+    # Now test connection
     escaped_password = quote_plus(creds['password'])
     conn_string = f"postgresql://{creds['user']}:{escaped_password}@{creds['host']}:{creds['port']}/{creds['dbname']}"
 
@@ -308,6 +335,28 @@ def init_db_headless(db_host, db_port, db_name, db_user, db_password, migrate_on
         print(f"\n→ Creating new configuration: {config_path}")
         os.makedirs(instance_path, exist_ok=True)
 
+    # Check if database exists, create if needed
+    check_cmd = f"sudo -u postgres psql -tAc \"SELECT 1 FROM pg_database WHERE datname='{db_name}'\""
+    try:
+        result = subprocess.run(check_cmd, shell=True, capture_output=True, text=True, timeout=5)
+        db_exists = "1" in result.stdout
+    except Exception:
+        db_exists = False
+
+    if not db_exists:
+        print(f"\n→ Database '{db_name}' does not exist. Creating it...")
+        create_cmd = f"sudo -u postgres psql -c \"CREATE DATABASE {db_name} OWNER {db_user};\""
+        try:
+            result = subprocess.run(create_cmd, shell=True, capture_output=True, text=True, timeout=10)
+            if result.returncode == 0:
+                print(f"✓ Database '{db_name}' created successfully!")
+            else:
+                print(f"✗ Failed to create database: {result.stderr}", file=sys.stderr)
+                sys.exit(1)
+        except Exception as e:
+            print(f"✗ Failed to create database: {e}", file=sys.stderr)
+            sys.exit(1)
+
     # Build connection string
     escaped_password = quote_plus(db_password)
     conn_string = f"postgresql://{db_user}:{escaped_password}@{db_host}:{db_port}/{db_name}"
@@ -334,8 +383,28 @@ def init_db_headless(db_host, db_port, db_name, db_user, db_password, migrate_on
     config.set('database_credentials', 'db_name', db_name)
     config.set('database_credentials', 'db_user', db_user)
 
-    # Note: PSA and Datto API keys should be configured through the Admin UI
-    # We only preserve existing sections if they exist, but don't create them
+    # Add default PSA configuration if not present
+    if not config.has_section('psa'):
+        config.add_section('psa')
+        config.set('psa', 'default_provider', 'freshservice')
+
+    # Add default RMM configuration if not present
+    if not config.has_section('rmm'):
+        config.add_section('rmm')
+        config.set('rmm', 'default_provider', 'datto')
+
+    # Add scheduler configuration if not present (vendor-neutral)
+    if not config.has_section('scheduler'):
+        config.add_section('scheduler')
+        config.set('scheduler', 'sync_psa_enabled', 'true')
+        config.set('scheduler', 'sync_rmm_enabled', 'true')
+        config.set('scheduler', 'sync_tickets_enabled', 'true')
+        config.set('scheduler', 'sync_psa_schedule', 'daily')
+        config.set('scheduler', 'sync_rmm_schedule', 'daily')
+        config.set('scheduler', 'sync_tickets_schedule', 'frequent')
+        config.set('scheduler', 'sync_run_on_startup', 'false')
+
+    # Note: PSA and RMM API keys should be configured through the Admin UI
 
     with open(config_path, 'w') as configfile:
         config.write(configfile)
@@ -489,7 +558,7 @@ def init_db(migrate_only=False, force=False, test_mode=False):
     print(" 🎉 Codex Initialization Complete!")
     print("="*80)
     print("\nIMPORTANT: Codex is the central data hub for HiveMatrix")
-    print("  - Codex syncs from PSA systems & Datto")
+    print("  - Codex syncs from PSA & RMM systems")
     print("  - Ledger pulls billing data from Codex")
     print("  - KnowledgeTree pulls support context from Codex")
     print("="*80)
@@ -497,7 +566,7 @@ def init_db(migrate_only=False, force=False, test_mode=False):
     print("  1. (Optional) Review configuration: instance/codex.conf")
     print("  2. Sync data from external systems (via Codex dashboard or CLI):")
     print("     → python sync_psa.py --type all        # Companies, contacts, tickets")
-    print("     → python pull_datto.py                 # Assets & backup data")
+    print("     → python sync_rmm.py                   # Assets & backup data")
     print("  3. Start the Codex service:")
     print("     → flask run --port=5010         # Development")
     print("     → python run.py                 # Production (Waitress)")

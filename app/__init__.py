@@ -60,10 +60,10 @@ app.config['PSA_ENABLED_PROVIDERS'] = config.get('psa', 'enabled_providers', fal
 
 # Scheduler configuration
 app.config['SYNC_PSA_ENABLED'] = config.getboolean('scheduler', 'sync_psa_enabled', fallback=True)
-app.config['SYNC_DATTO_ENABLED'] = config.getboolean('scheduler', 'sync_datto_enabled', fallback=True)
+app.config['SYNC_RMM_ENABLED'] = config.getboolean('scheduler', 'sync_rmm_enabled', fallback=True)
 app.config['SYNC_TICKETS_ENABLED'] = config.getboolean('scheduler', 'sync_tickets_enabled', fallback=True)
 app.config['SYNC_PSA_SCHEDULE'] = config.get('scheduler', 'sync_psa_schedule', fallback='daily')
-app.config['SYNC_DATTO_SCHEDULE'] = config.get('scheduler', 'sync_datto_schedule', fallback='daily')
+app.config['SYNC_RMM_SCHEDULE'] = config.get('scheduler', 'sync_rmm_schedule', fallback='daily')
 app.config['SYNC_TICKETS_SCHEDULE'] = config.get('scheduler', 'sync_tickets_schedule', fallback='frequent')
 app.config['SYNC_RUN_ON_STARTUP'] = config.getboolean('scheduler', 'sync_run_on_startup', fallback=False)
 

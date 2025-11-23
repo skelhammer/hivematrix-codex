@@ -159,11 +159,11 @@ def sync_psa():
 @app.route('/sync/datto', methods=['POST'])
 @admin_required
 def sync_datto():
-    """Trigger Datto RMM sync script in background."""
+    """Trigger RMM sync script in background."""
     try:
         job_id = str(uuid.uuid4())
-        script_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'pull_datto.py')
-        follow_up_script = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'push_account_nums_to_datto.py')
+        script_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'sync_rmm.py')
+        follow_up_script = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'app', 'rmm', 'push_account_numbers.py')
 
         # Create job entry in database
         job = SyncJob(
@@ -183,7 +183,7 @@ def sync_datto():
         return jsonify({
             'success': True,
             'job_id': job_id,
-            'message': 'Datto RMM sync started in background (will auto-push account numbers)'
+            'message': 'RMM sync started in background (will auto-push account numbers)'
         })
     except Exception as e:
         app.logger.error(f"Datto sync failed: {e}")
@@ -223,7 +223,7 @@ def sync_create_account_numbers():
     """Create account numbers for companies that don't have them."""
     try:
         job_id = str(uuid.uuid4())
-        script_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'create_account_numbers.py')
+        script_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'app', 'psa', 'create_account_numbers.py')
 
         # Create job entry in database
         job = SyncJob(

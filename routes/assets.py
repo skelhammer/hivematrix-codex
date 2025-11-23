@@ -27,7 +27,7 @@ def search_assets_api():
             db.or_(
                 Asset.hostname.ilike(search_pattern),
                 Asset.description.ilike(search_pattern),
-                Asset.datto_site_name.ilike(search_pattern),
+                Asset.rmm_site_name.ilike(search_pattern),
                 Company.name.ilike(search_pattern)
             )
         )
@@ -93,7 +93,7 @@ def list_assets():
             db.or_(
                 Asset.hostname.ilike(search_pattern),
                 Asset.description.ilike(search_pattern),
-                Asset.datto_site_name.ilike(search_pattern),
+                Asset.rmm_site_name.ilike(search_pattern),
                 Company.name.ilike(search_pattern)
             )
         )
