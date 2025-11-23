@@ -107,8 +107,8 @@
                     <p class="u-mb-1 view-mode"><strong>Compliance Level:</strong>
                         {% if company.compliance_level == 'cjis' %}
                             <span class="badge badge--warning">CJIS (Criminal Justice)</span>
-                        {% elif company.compliance_level == 'phi' %}
-                            <span class="badge badge--info">PHI (Healthcare)</span>
+                        {% elif company.compliance_level == 'hipaa' %}
+                            <span class="badge badge--info">HIPAA (Healthcare)</span>
                         {% else %}
                             <span class="badge badge--secondary">Standard</span>
                         {% endif %}
@@ -118,10 +118,10 @@
                         <select class="form-group__input" id="edit-compliance_level">
                             <option value="standard" {% if (company.compliance_level or 'standard') == 'standard' %}selected{% endif %}>Standard (Regular MSP Client)</option>
                             <option value="cjis" {% if company.compliance_level == 'cjis' %}selected{% endif %}>CJIS (Criminal Justice / Police Dept)</option>
-                            <option value="phi" {% if company.compliance_level == 'phi' %}selected{% endif %}>PHI (Healthcare / HIPAA)</option>
+                            <option value="hipaa" {% if company.compliance_level == 'hipaa' %}selected{% endif %}>HIPAA (Healthcare Compliance)</option>
                         </select>
                         <small class="form-group__help">
-                            <em>Controls data filtering for AI chatbot to prevent PII/PHI leakage to external servers</em>
+                            <em>Controls data filtering for AI chatbot to prevent PII/PHI/CJIS leakage to external servers</em>
                         </small>
                     </div>
 

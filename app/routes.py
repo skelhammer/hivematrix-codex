@@ -1253,8 +1253,11 @@ def api_list_tickets():
     # Apply pagination
     tickets = query.offset(offset).limit(limit).all()
 
-    return jsonify({
-        'tickets': [{
+    # Build ticket list with company compliance levels
+    ticket_list = []
+    for t in tickets:
+        company = Company.query.get(t.company_account_number)
+        ticket_list.append({
             'id': t.id,
             'ticket_number': t.ticket_number,
             'subject': t.subject,
@@ -1262,13 +1265,17 @@ def api_list_tickets():
             'status': t.status,
             'priority': t.priority,
             'company_id': t.company_account_number,
+            'company_compliance_level': company.compliance_level if company else 'standard',
             'requester_email': t.requester_email,
             'requester_name': t.requester_name,
             'created_at': t.created_at,
             'last_updated_at': t.last_updated_at,
             'closed_at': t.closed_at,
             'total_hours_spent': float(t.total_hours_spent or 0)
-        } for t in tickets],
+        })
+
+    return jsonify({
+        'tickets': ticket_list,
         'count': len(tickets),
         'total': total_count,
         'offset': offset,
@@ -1614,6 +1621,7 @@ def api_get_ticket(ticket_id):
             'priority_text': get_priority_display_name(ticket.priority, source),
             'company_id': ticket.company_account_number,
             'company_name': company.name if company else None,
+            'company_compliance_level': company.compliance_level if company else 'standard',
             'requester_email': ticket.requester_email,
             'requester_name': ticket.requester_name,
             'created_at': ticket.created_at,
