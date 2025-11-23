@@ -6,9 +6,14 @@ from models import Company, Contact, Asset, Location, TicketDetail, SyncJob, Bil
 from extensions import db
 import subprocess
 import os
+import sys
 import uuid
 import threading
 import configparser
+
+# Health check library
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from health_check import HealthChecker
 
 
 def get_default_psa_provider():
@@ -1408,11 +1413,27 @@ def api_get_device(device_id):
 @app.route('/api/health', methods=['GET'])
 @limiter.exempt
 def health_check():
-    """Health check endpoint for monitoring"""
-    return {
-        'status': 'healthy',
-        'timestamp': datetime.utcnow().isoformat()
-    }
+    """
+    Comprehensive health check endpoint.
+
+    Checks:
+    - PostgreSQL database connectivity
+    - Disk space
+    - Core service availability
+
+    Returns:
+        JSON: Detailed health status with HTTP 200 (healthy) or 503 (unhealthy/degraded)
+    """
+    # Initialize health checker
+    health_checker = HealthChecker(
+        service_name='codex',
+        db=db,
+        dependencies=[
+            ('core', 'http://localhost:5000')
+        ]
+    )
+
+    return health_checker.get_health()
 
 
 # ===== GENERIC PSA ENDPOINTS =====
