@@ -49,7 +49,9 @@
                     </div>
                     <div class="dashboard-card__content">
                         <h2 class="dashboard-card__title">Agents</h2>
-                        <p class="dashboard-card__count" id="agent-count">Loading...</p>
+                        <p class="dashboard-card__count" id="agent-count">
+                            <span class="skeleton skeleton-text" style="width: 60px; height: 2rem; display: inline-block;"></span>
+                        </p>
                     </div>
                 </a>
 
@@ -87,13 +89,13 @@
 
                 const countElem = document.getElementById('agent-count');
                 if (countElem) {
-                    countElem.textContent = data.total || 0;
+                    countElem.innerHTML = data.total || 0;
                 }
             } catch (error) {
                 console.error('Error loading agent count:', error);
                 const countElem = document.getElementById('agent-count');
                 if (countElem) {
-                    countElem.textContent = '0';
+                    countElem.innerHTML = '0';
                 }
             }
         }
