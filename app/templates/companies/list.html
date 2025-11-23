@@ -1,12 +1,8 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Companies - Codex</title>
-    <script src="https://unpkg.com/lucide@latest"></script>
-</head>
-<body>
+{% extends "layout.html" %}
+
+{% block title %}Companies{% endblock %}
+
+{% block content %}
     {% macro plan_badge_class(plan) -%}
     {%- if not plan or plan == 'No Plan' -%}
     {%- elif 'platinum' in plan.lower() -%}badge--platinum
@@ -182,8 +178,10 @@
             </div>
         </div>
     </div>
+{% endblock %}
 
-    <script>
+{% block scripts %}
+<script>
         let currentPage = {{ pagination.page }};
         let currentPerPage = {{ per_page }};
         let currentSortBy = '{{ sort_by }}';
@@ -524,9 +522,5 @@
             // Re-render icons after pagination is created
             setTimeout(() => lucide.createIcons(), 100);
         });
-    </script>
-    <div class="version-footer">
-        <span class="version-footer__text">{{ app_service_name }} v{{ app_version }}</span>
-    </div>
-</body>
-</html>
+</script>
+{% endblock %}

@@ -1,12 +1,8 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Agents - Codex</title>
-    <script src="https://unpkg.com/lucide@latest"></script>
-</head>
-<body>
+{% extends "layout.html" %}
+
+{% block title %}Agents{% endblock %}
+
+{% block content %}
     <div class="card">
         <div class="card__header">
             <h1 class="card__title">Agent Management</h1>
@@ -275,8 +271,10 @@
             </div>
         </div>
     </div>
+{% endblock %}
 
-    <script>
+{% block scripts %}
+<script>
         let allGroups = [];
         let currentKeycloakId = null;
 
@@ -771,9 +769,5 @@
             loadPSAAgents();
             lucide.createIcons();
         });
-    </script>
-    <div class="version-footer">
-        <span class="version-footer__text">{{ app_service_name }} v{{ app_version }}</span>
-    </div>
-</body>
-</html>
+</script>
+{% endblock %}
