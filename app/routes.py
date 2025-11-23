@@ -602,7 +602,7 @@ def api_get_company_assets(account_number):
       Retrieves all assets (computers, devices) associated with a specific company.
       Used by Ledger for user count billing and by other services for asset management.
 
-      Assets are synced from RMM systems (Datto) and include hardware/software inventory.
+      Assets are synced from RMM providers and include hardware/software inventory.
     security:
       - Bearer: []
     parameters:
