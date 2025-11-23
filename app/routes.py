@@ -1711,11 +1711,13 @@ def api_update_ticket(ticket_id):
         }), 500
 
 
-@app.route('/api/datto/devices', methods=['GET'])
+@app.route('/api/rmm/devices', methods=['GET'])
 @token_required
-def api_list_devices():
+def api_list_rmm_devices():
     """
-    List all devices from Datto RMM (currently uses Asset data).
+    List all devices from RMM system (vendor-agnostic).
+
+    Works with any RMM provider (Datto, SuperOps, etc.) configured in Codex.
 
     Query parameters:
         company_id: Filter by company account number
@@ -1759,11 +1761,13 @@ def api_list_devices():
     })
 
 
-@app.route('/api/datto/device/<device_id>', methods=['GET'])
+@app.route('/api/rmm/device/<device_id>', methods=['GET'])
 @token_required
-def api_get_device(device_id):
+def api_get_rmm_device(device_id):
     """
-    Get detailed information about a specific device.
+    Get detailed information about a specific device (vendor-agnostic).
+
+    Works with any RMM provider (Datto, SuperOps, etc.) configured in Codex.
 
     Device ID format: "device-{asset_id}"
     """
@@ -1783,7 +1787,7 @@ def api_get_device(device_id):
     # Get company info
     company = asset.company
 
-    # Simulate health metrics (will be replaced with real Datto data)
+    # Simulate health metrics (will be replaced with real RMM provider data)
     import random
     random.seed(asset_id)  # Consistent values for same device
 
@@ -1805,7 +1809,7 @@ def api_get_device(device_id):
         'patch_status': asset.patch_status,
         'last_reboot': asset.last_reboot,
         'installed_software': [
-            # Simulated - will be replaced with real data
+            # Simulated - will be replaced with real data from RMM provider
             {'name': 'Microsoft Office', 'version': '16.0'},
             {'name': 'Google Chrome', 'version': '120.0'}
         ],
