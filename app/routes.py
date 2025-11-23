@@ -293,7 +293,76 @@ def sync_push_to_datto():
 @app.route('/api/companies')
 @token_required
 def api_get_all_companies():
-    """Get all companies - used by Ledger service."""
+    """Get all companies - used by Ledger service.
+    ---
+    tags:
+      - Companies
+    summary: List all companies
+    description: Returns a list of all companies with their billing information
+    security:
+      - Bearer: []
+    responses:
+      200:
+        description: List of companies retrieved successfully
+        schema:
+          type: array
+          items:
+            type: object
+            properties:
+              account_number:
+                type: string
+                example: "12345"
+              name:
+                type: string
+                example: "Acme Corporation"
+              description:
+                type: string
+                example: "Technology company"
+              billing_plan:
+                type: string
+                example: "Enterprise"
+              contract_term_length:
+                type: integer
+                example: 12
+              contract_start_date:
+                type: string
+                format: date
+                example: "2024-01-01"
+              contract_end_date:
+                type: string
+                format: date
+                example: "2024-12-31"
+              support_level:
+                type: string
+                example: "Premium"
+              profit_or_non_profit:
+                type: string
+                example: "Profit"
+              company_main_number:
+                type: string
+                example: "+1-555-0123"
+              company_start_date:
+                type: string
+                format: date
+                example: "2020-01-01"
+              domains:
+                type: string
+                example: "acme.com, acmecorp.com"
+              phone_system:
+                type: string
+                example: "VoIP"
+              email_system:
+                type: string
+                example: "Microsoft 365"
+      401:
+        description: Unauthorized - missing or invalid JWT token
+        schema:
+          type: object
+          properties:
+            error:
+              type: string
+              example: "Unauthorized"
+    """
     companies = Company.query.all()
     return jsonify([{
         'account_number': c.account_number,
