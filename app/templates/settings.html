@@ -294,6 +294,17 @@
                     savedHomePage = currentHomePage;
                     showToast('Settings saved successfully!', 'success');
 
+                    // Invalidate Nexus cache so next page load uses new theme
+                    try {
+                        await fetch('/api/invalidate-cache', {
+                            method: 'POST',
+                            credentials: 'same-origin'
+                        });
+                        console.log('Nexus cache invalidated');
+                    } catch (cacheError) {
+                        console.warn('Failed to invalidate cache:', cacheError);
+                    }
+
                     // Reload page after 1 second to apply theme globally
                     setTimeout(() => {
                         window.location.reload();
