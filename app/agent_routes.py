@@ -218,8 +218,8 @@ def update_agent_settings(keycloak_id):
 
     if 'preferred_color_theme' in data:
         color_theme = data['preferred_color_theme']
-        if color_theme not in ['purple', 'blue', 'green', 'orange', 'gold', 'red', 'yellow']:
-            return {'error': 'Invalid color theme. Must be one of: purple, blue, green, orange, gold, red, yellow'}, 400
+        if color_theme not in ['purple', 'blue', 'green', 'orange', 'gold', 'red', 'yellow', 'matrix']:
+            return {'error': 'Invalid color theme. Must be one of: purple, blue, green, orange, gold, red, yellow, matrix'}, 400
         agent.preferred_color_theme = color_theme
 
     agent.updated_at = datetime.utcnow().isoformat()
@@ -314,8 +314,8 @@ def update_my_settings():
     # Update color theme preference
     if 'preferred_color_theme' in data:
         color_theme = data['preferred_color_theme']
-        if color_theme not in ['purple', 'blue', 'green', 'orange', 'gold', 'red', 'yellow']:
-            return {'error': 'Invalid color theme. Must be one of: purple, blue, green, orange, gold, red, yellow'}, 400
+        if color_theme not in ['purple', 'blue', 'green', 'orange', 'gold', 'red', 'yellow', 'matrix']:
+            return {'error': 'Invalid color theme. Must be one of: purple, blue, green, orange, gold, red, yellow, matrix'}, 400
         agent.preferred_color_theme = color_theme
 
     # Update KnowledgeTree view preference
