@@ -3,13 +3,12 @@
 {% block title %}Codex Dashboard{% endblock %}
 
 {% block content %}
+<div class="page-header">
+    <h1 class="page-header__title">Codex - Data Platform</h1>
+    <p class="page-header__description">Centralized database for companies, contacts, assets, users, tickets, and extensible custom data storage.</p>
+</div>
+
 <div class="card">
-        <div class="card__header">
-            <div>
-                <h1 class="card__title u-mb-0">Codex - Data Platform</h1>
-                <p class="u-text-muted u-text-sm u-mb-0">Centralized database for companies, contacts, assets, users, tickets, and extensible custom data storage.</p>
-            </div>
-        </div>
         <div class="card__body">
             <div class="dashboard-grid dashboard-grid--three-col">
                 <a href="{{ url_for('companies.list_companies') }}" class="dashboard-card">
