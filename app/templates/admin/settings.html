@@ -3,30 +3,31 @@
 {% block title %}Admin Settings{% endblock %}
 
 {% block content %}
-    <div class="card">
-        <div class="card__header">
-            <h1 class="card__title">Admin Settings</h1>
-            <div class="card__header-actions">
-                <button class="btn" onclick="window.location.href='{{ url_for('index') }}'">
-                    <span class="btn__label">
-                        <i data-lucide="arrow-left" class="btn__icon"></i>
-                        Back to Dashboard
-                    </span>
-                </button>
-            </div>
+    <div class="page-header">
+        <div class="page-header__content">
+            <h1 class="page-header__title">Admin Settings</h1>
         </div>
-        {% with messages = get_flashed_messages(with_categories=true) %}
-            {% if messages %}
-            <div class="toast-container" id="toast-container">
-                {% for category, message in messages %}
-                    <div class="toast toast--{{ 'success' if category == 'success' else 'warning' if category == 'warning' else 'info' if category == 'info' else 'error' }}" onclick="dismissToast(this)">
-                        {{ message }}
-                    </div>
-                {% endfor %}
-            </div>
-            {% endif %}
-        {% endwith %}
+        <div class="page-header__actions">
+            <button class="btn" onclick="window.location.href='{{ url_for('index') }}'">
+                <span class="btn__label">
+                    <i data-lucide="arrow-left" class="btn__icon"></i>
+                    Back to Dashboard
+                </span>
+            </button>
+        </div>
     </div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+        <div class="toast-container" id="toast-container">
+            {% for category, message in messages %}
+                <div class="toast toast--{{ 'success' if category == 'success' else 'warning' if category == 'warning' else 'info' if category == 'info' else 'error' }}" onclick="dismissToast(this)">
+                    {{ message }}
+                </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+    {% endwith %}
 
     <div class="card">
         <div class="card__header">

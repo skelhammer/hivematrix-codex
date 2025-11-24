@@ -3,9 +3,23 @@
 {% block title %}{{ asset.hostname }}{% endblock %}
 
 {% block content %}
+    <div class="page-header">
+        <div class="page-header__content">
+            <h1 class="page-header__title">{{ asset.hostname }}</h1>
+        </div>
+        <div class="page-header__actions">
+            <button class="btn" onclick="window.location.href='{{ url_for('assets.list_assets') }}'">
+                <span class="btn__label">
+                    <i data-lucide="arrow-left" class="btn__icon"></i>
+                    Back to Assets
+                </span>
+            </button>
+        </div>
+    </div>
+
     <div class="card">
         <div class="card__header">
-            <h1 class="card__title">{{ asset.hostname }}</h1>
+            <h2 class="card__title">Device Information</h2>
             <div class="card__header-actions">
                 {% if asset.web_remote_url %}
                 <a href="{{ asset.web_remote_url }}" target="_blank">
@@ -27,19 +41,7 @@
                     </button>
                 </a>
                 {% endif %}
-                <button class="btn" onclick="window.location.href='{{ url_for('assets.list_assets') }}'">
-                    <span class="btn__label">
-                        <i data-lucide="arrow-left" class="btn__icon"></i>
-                        Back to Assets
-                    </span>
-                </button>
             </div>
-        </div>
-    </div>
-
-    <div class="card">
-        <div class="card__header">
-            <h2 class="card__title">Device Information</h2>
         </div>
         <div class="card__body">
             <div class="info-grid">
@@ -116,7 +118,7 @@
                         Manage Users
                     </span>
                 </button>
-                <button type="button" id="saveContactsBtn" class="btn btn--success" onclick="saveContacts()" style="display: none;">
+                <button type="button" id="saveContactsBtn" class="btn btn--primary" onclick="saveContacts()" style="display: none;">
                     <span class="btn__label">
                         <i data-lucide="save" class="btn__icon"></i>
                         Save Changes

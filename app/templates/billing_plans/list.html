@@ -1,60 +1,72 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Billing Plans - Codex</title>
-    <script src="https://unpkg.com/lucide@latest"></script>
-</head>
-<body>
+{% extends "layout.html" %}
+
+{% block title %}Billing Plans{% endblock %}
+
+{% block content %}
+    <div class="page-header">
+        <div class="page-header__content">
+            <h1 class="page-header__title">Billing Plans Configuration</h1>
+        </div>
+        <div class="page-header__actions">
+            <button class="btn" onclick="window.location.href='{{ url_for('index') }}'">
+                <span class="btn__label">
+                    <i data-lucide="arrow-left" class="btn__icon"></i>
+                    Back to Dashboard
+                </span>
+            </button>
+        </div>
+    </div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+        <div class="toast-container" id="toast-container">
+            {% for category, message in messages %}
+                <div class="toast toast--{{ 'success' if category == 'success' else 'warning' if category == 'warning' else 'info' if category == 'info' else 'error' }}" onclick="dismissToast(this)">
+                    {{ message }}
+                </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+    {% endwith %}
+
+    {% if user.permission_level == 'admin' %}
     <div class="card">
         <div class="card__header">
-            <h1 class="card__title">Billing Plans Configuration</h1>
-            <div class="card__header-actions">
-                {% if user.permission_level == 'admin' %}
-                <button type="button" class="btn btn--secondary" onclick="openImportModal()">
+            <h2 class="card__title">Import / Export</h2>
+        </div>
+        <div class="card__body">
+            <div class="u-flex u-flex-gap">
+                <button type="button" class="btn btn--primary" onclick="openImportModal()">
                     <span class="btn__label">
                         <i data-lucide="upload" class="btn__icon"></i>
                         Import JSON
                     </span>
                 </button>
-                <button type="button" class="btn btn--secondary" onclick="window.location.href='{{ url_for('billing_plans.export_plans') }}'">
+                <button type="button" class="btn btn--primary" onclick="window.location.href='{{ url_for('billing_plans.export_plans') }}'">
                     <span class="btn__label">
                         <i data-lucide="download" class="btn__icon"></i>
                         Export JSON
                     </span>
                 </button>
-                {% endif %}
-                <button class="btn" onclick="window.location.href='{{ url_for('index') }}'">
-                    <span class="btn__label">
-                        <i data-lucide="arrow-left" class="btn__icon"></i>
-                        Back to Dashboard
-                    </span>
-                </button>
             </div>
         </div>
+    </div>
+    {% endif %}
 
-        {% with messages = get_flashed_messages(with_categories=true) %}
-            {% if messages %}
-            <div class="toast-container" id="toast-container">
-                {% for category, message in messages %}
-                    <div class="toast toast--{{ 'success' if category == 'success' else 'warning' if category == 'warning' else 'info' if category == 'info' else 'error' }}" onclick="dismissToast(this)">
-                        {{ message }}
-                    </div>
-                {% endfor %}
-            </div>
-            {% endif %}
-        {% endwith %}
-
+    <div class="card">
         <div class="card__body">
-            <div class="tabs">
-                <button class="tabs__tab tabs__tab--active" onclick="switchTab(event, 'plans')" id="plans-tab-btn">
-                    <i data-lucide="dollar-sign" class="btn__icon"></i>
-                    Billing Plans
+            <div class="btn-group" style="margin-bottom: 1.5rem;">
+                <button class="btn btn--sm btn--primary" onclick="switchTab(event, 'plans')" id="plans-tab-btn">
+                    <span class="btn__label">
+                        <i data-lucide="dollar-sign" class="btn__icon"></i>
+                        Billing Plans
+                    </span>
                 </button>
-                <button class="tabs__tab" onclick="switchTab(event, 'features')" id="features-tab-btn">
-                    <i data-lucide="settings" class="btn__icon"></i>
-                    Feature Options
+                <button class="btn btn--sm btn--outline" onclick="switchTab(event, 'features')" id="features-tab-btn">
+                    <span class="btn__label">
+                        <i data-lucide="settings" class="btn__icon"></i>
+                        Feature Options
+                    </span>
                 </button>
             </div>
 
@@ -121,7 +133,7 @@
                         <form method="POST" action="{{ url_for('billing_plans.save_plans') }}" id="form-{{ loop.index }}">
                             <input type="hidden" name="plan_name" value="{{ plan_name }}">
 
-                            <h3 class="section-header-{{ plan_name | replace(' ', '_') }} u-mt-0 u-mb-2 u-text-muted">Pricing Configuration</h3>
+                            <h3 class="section-header-{{ plan_name | replace(' ', '_') }} u-mt-0 u-mb-2">Pricing Configuration</h3>
                             <div class="section-content-{{ plan_name | replace(' ', '_') }} table-wrapper u-mb-3">
                                 <table class="data-table">
                                     <thead>
@@ -171,7 +183,7 @@
                                 </table>
                             </div>
 
-                            <h3 class="section-header-{{ plan_name | replace(' ', '_') }} u-mt-0 u-mb-2 u-text-muted">Feature Configuration</h3>
+                            <h3 class="section-header-{{ plan_name | replace(' ', '_') }} u-mt-0 u-mb-2">Feature Configuration</h3>
                             <div class="section-content-{{ plan_name | replace(' ', '_') }} table-wrapper">
                                 <table class="data-table">
                                     <thead>
@@ -261,6 +273,7 @@
                 {% endif %}
             </div>
         </div>
+    </div>
     </div>
 
     <div id="featureModal" class="modal">
@@ -380,17 +393,21 @@
             </div>
         </div>
     </div>
+{% endblock %}
 
-    <script>
+{% block scripts %}
+<script>
     function switchTab(event, tabName) {
         document.querySelectorAll('.tab-content').forEach(tab => {
             tab.classList.remove('tab-content--active');
         });
-        document.querySelectorAll('.tabs__tab').forEach(tab => {
-            tab.classList.remove('tabs__tab--active');
+        document.querySelectorAll('.btn-group .btn').forEach(btn => {
+            btn.classList.remove('btn--primary');
+            btn.classList.add('btn--outline');
         });
         document.getElementById(tabName + '-tab').classList.add('tab-content--active');
-        event.currentTarget.classList.add('tabs__tab--active');
+        event.currentTarget.classList.remove('btn--outline');
+        event.currentTarget.classList.add('btn--primary');
     }
 
     function closeFeatureModal() {
@@ -497,9 +514,5 @@
             setTimeout(() => dismissToast(toast), 5000);
         });
     });
-    </script>
-    <div class="version-footer">
-        <span class="version-footer__text">{{ app_service_name }} v{{ app_version }}</span>
-    </div>
-</body>
-</html>
+</script>
+{% endblock %}

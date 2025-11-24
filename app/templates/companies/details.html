@@ -15,43 +15,46 @@
     {%- elif 'break fix' in plan.lower() or 'pro services' in plan.lower() -%}badge--warning
     {%- endif -%}
     {%- endmacro %}
-    <div class="card">
-        <div class="card__header">
-            <h1 class="card__title">{{ company.name }}</h1>
-            <div class="card__header-actions">
-                {% if user.permission_level in ['admin', 'technician'] %}
-                <button type="button" id="editBtn" class="btn btn--primary" onclick="toggleEditMode()">
-                    <span class="btn__label">
-                        <i data-lucide="edit" class="btn__icon"></i>
-                        Edit Details
-                    </span>
-                </button>
-                <button type="button" id="saveBtn" class="btn btn--success" onclick="saveCompany()" style="display: none;">
-                    <span class="btn__label">
-                        <i data-lucide="save" class="btn__icon"></i>
-                        Save Changes
-                    </span>
-                </button>
-                <button type="button" id="cancelBtn" class="btn btn--secondary" onclick="cancelEdit()" style="display: none;">
-                    <span class="btn__label">
-                        <i data-lucide="x" class="btn__icon"></i>
-                        Cancel
-                    </span>
-                </button>
-                {% endif %}
-                <button type="button" class="btn" onclick="window.location.href='{{ url_for('companies.list_companies') }}'">
-                    <span class="btn__label">
-                        <i data-lucide="arrow-left" class="btn__icon"></i>
-                        Back to Companies
-                    </span>
-                </button>
-            </div>
+
+    <div class="page-header">
+        <div class="page-header__content">
+            <h1 class="page-header__title">{{ company.name }}</h1>
+        </div>
+        <div class="page-header__actions">
+            <button type="button" class="btn" onclick="window.location.href='{{ url_for('companies.list_companies') }}'">
+                <span class="btn__label">
+                    <i data-lucide="arrow-left" class="btn__icon"></i>
+                    Back to Companies
+                </span>
+            </button>
         </div>
     </div>
 
     <div class="card">
         <div class="card__header">
             <h2 class="card__title">Company Overview</h2>
+            {% if user.permission_level in ['admin', 'technician'] %}
+            <div class="card__header-actions">
+                <button type="button" id="editBtn" class="btn btn--primary" onclick="toggleEditMode()">
+                    <span class="btn__label">
+                        <i data-lucide="edit" class="btn__icon"></i>
+                        Edit Details
+                    </span>
+                </button>
+                <button type="button" id="saveBtn" class="btn btn--primary" onclick="saveCompany()" style="display: none;">
+                    <span class="btn__label">
+                        <i data-lucide="save" class="btn__icon"></i>
+                        Save Changes
+                    </span>
+                </button>
+                <button type="button" id="cancelBtn" class="btn" onclick="cancelEdit()" style="display: none;">
+                    <span class="btn__label">
+                        <i data-lucide="x" class="btn__icon"></i>
+                        Cancel
+                    </span>
+                </button>
+            </div>
+            {% endif %}
         </div>
         <div class="card__body">
             <div class="info-grid">

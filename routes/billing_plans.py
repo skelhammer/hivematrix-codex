@@ -2,6 +2,7 @@ from flask import Blueprint, render_template, g, request, redirect, url_for, fla
 from app.auth import token_required, admin_required
 from models import db, BillingPlan, FeatureOption, PlanFeature
 from collections import defaultdict
+from app import limiter
 
 billing_plans_bp = Blueprint('billing_plans', __name__, url_prefix='/billing-plans')
 
@@ -187,7 +188,7 @@ def create_plan():
 
     try:
         # Create plan for all 4 term lengths
-        terms = ['Month to Month', '1-Year', '2-Year', '3-Year']
+        terms = ['Month to Month', '1 Year', '2 Year', '3 Year']
         for term in terms:
             plan = BillingPlan(
                 plan_name=new_plan_name,
@@ -332,6 +333,7 @@ def delete_feature_option(option_id):
 
 @billing_plans_bp.route('/api/plans', methods=['GET'])
 @token_required
+@limiter.exempt  # Exempt internal service-to-service API calls from rate limiting
 def api_get_all_plans():
     """
     API: Get all billing plans with complete data.
@@ -388,58 +390,82 @@ def api_get_all_plans():
 
 @billing_plans_bp.route('/api/plans/<plan_name>/<term_length>', methods=['GET'])
 @token_required
+@limiter.exempt  # Exempt internal service-to-service API calls from rate limiting
 def api_get_plan(plan_name, term_length):
     """
     API: Get a specific billing plan by name and term.
     """
-    plan = BillingPlan.query.filter_by(
-        plan_name=plan_name,
-        term_length=term_length
-    ).first()
+    try:
+        from urllib.parse import unquote
 
-    if not plan:
+        # URL decode parameters (Flask does this automatically, but be explicit)
+        plan_name = unquote(plan_name)
+        term_length = unquote(term_length)
+
+        plan = BillingPlan.query.filter_by(
+            plan_name=plan_name,
+            term_length=term_length
+        ).first()
+
+        if not plan:
+            return jsonify({
+                'status': 'error',
+                'message': f'Plan not found: {plan_name} ({term_length})'
+            }), 404
+
+        plan_dict = {
+            'id': plan.id,
+            'plan_name': plan.plan_name,
+            'term_length': plan.term_length,
+            'support_level': plan.support_level or 'Billed Hourly',
+
+            # Pricing
+            'per_user_cost': float(plan.per_user_cost or 0),
+            'per_workstation_cost': float(plan.per_workstation_cost or 0),
+            'per_server_cost': float(plan.per_server_cost or 0),
+            'per_vm_cost': float(plan.per_vm_cost or 0),
+            'per_switch_cost': float(plan.per_switch_cost or 0),
+            'per_firewall_cost': float(plan.per_firewall_cost or 0),
+            'per_hour_ticket_cost': float(plan.per_hour_ticket_cost or 0),
+
+            # Backup pricing
+            'backup_base_fee_workstation': float(plan.backup_base_fee_workstation or 0),
+            'backup_base_fee_server': float(plan.backup_base_fee_server or 0),
+            'backup_included_tb': float(plan.backup_included_tb or 1.0),
+            'backup_per_tb_fee': float(plan.backup_per_tb_fee or 0),
+
+            # Dynamic features
+            'features': {}
+        }
+
+        # Add dynamic features safely
+        try:
+            for plan_feature in plan.features:
+                plan_dict['features'][plan_feature.feature_type] = plan_feature.feature_value
+        except Exception as feature_error:
+            # Log but don't fail - return plan with empty features
+            from app import helm_logger
+            helm_logger.warning(f"Error loading features for plan {plan_name}/{term_length}: {feature_error}")
+
+        return jsonify({
+            'status': 'success',
+            'plan': plan_dict
+        })
+
+    except Exception as e:
+        from app import helm_logger
+        import traceback
+        error_details = traceback.format_exc()
+        helm_logger.error(f"Error in api_get_plan for {plan_name}/{term_length}: {str(e)}\n{error_details}")
         return jsonify({
             'status': 'error',
-            'message': f'Plan not found: {plan_name} ({term_length})'
-        }), 404
-
-    plan_dict = {
-        'id': plan.id,
-        'plan_name': plan.plan_name,
-        'term_length': plan.term_length,
-        'support_level': plan.support_level,
-
-        # Pricing
-        'per_user_cost': float(plan.per_user_cost or 0),
-        'per_workstation_cost': float(plan.per_workstation_cost or 0),
-        'per_server_cost': float(plan.per_server_cost or 0),
-        'per_vm_cost': float(plan.per_vm_cost or 0),
-        'per_switch_cost': float(plan.per_switch_cost or 0),
-        'per_firewall_cost': float(plan.per_firewall_cost or 0),
-        'per_hour_ticket_cost': float(plan.per_hour_ticket_cost or 0),
-
-        # Backup pricing
-        'backup_base_fee_workstation': float(plan.backup_base_fee_workstation or 0),
-        'backup_base_fee_server': float(plan.backup_base_fee_server or 0),
-        'backup_included_tb': float(plan.backup_included_tb or 1.0),
-        'backup_per_tb_fee': float(plan.backup_per_tb_fee or 0),
-
-        # Dynamic features
-        'features': {}
-    }
-
-    # Add dynamic features
-    for plan_feature in plan.features:
-        plan_dict['features'][plan_feature.feature_type] = plan_feature.feature_value
-
-    return jsonify({
-        'status': 'success',
-        'plan': plan_dict
-    })
+            'message': f'Internal server error: {str(e)}'
+        }), 500
 
 
 @billing_plans_bp.route('/api/feature-options', methods=['GET'])
 @token_required
+@limiter.exempt  # Exempt internal service-to-service API calls from rate limiting
 def api_get_feature_options():
     """
     API: Get all feature options grouped by category.

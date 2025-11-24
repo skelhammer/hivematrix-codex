@@ -3,20 +3,22 @@
 {% block title %}Agents{% endblock %}
 
 {% block content %}
-    <div class="card">
-        <div class="card__header">
-            <h1 class="card__title">Agent Management</h1>
-            <div class="card__header-actions">
-                <button class="btn" onclick="window.location.href='{{ url_for('index') }}'">
-                    <span class="btn__label">
-                        <i data-lucide="arrow-left" class="btn__icon"></i>
-                        Back to Dashboard
-                    </span>
-                </button>
-            </div>
+    <div class="page-header">
+        <div class="page-header__content">
+            <h1 class="page-header__title">Agent Management</h1>
         </div>
+        <div class="page-header__actions">
+            <button class="btn" onclick="window.location.href='{{ url_for('index') }}'">
+                <span class="btn__label">
+                    <i data-lucide="arrow-left" class="btn__icon"></i>
+                    Back to Dashboard
+                </span>
+            </button>
+        </div>
+    </div>
+
+    <div class="card">
         <div class="card__body">
-            <p class="u-text-secondary u-mb-2">Manage system users from Keycloak with Codex-specific settings</p>
             <div class="u-flex u-flex-gap u-flex-wrap u-mb-2">
                 <button class="btn btn--primary" onclick="syncAgents()">
                     <span class="btn__label">
@@ -315,43 +317,60 @@
                 return;
             }
 
-            agents.forEach(agent => {
-                const card = document.createElement('div');
-                card.className = 'agent-card';
-                card.onclick = () => editAgent(agent.keycloak_id);
+            let html = `
+                <div class="table-wrapper">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Username</th>
+                                <th>Name</th>
+                                <th>Email</th>
+                                <th>Status</th>
+                                <th>Last Synced</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+            `;
 
-                const themeIcon = agent.theme_preference === 'dark'
-                    ? '<i data-lucide="moon"></i>'
-                    : '<i data-lucide="sun"></i>';
+            agents.forEach(agent => {
                 const statusBadge = agent.enabled
                     ? '<span class="status-text status-text--success">Enabled</span>'
                     : '<span class="status-text status-text--danger">Disabled</span>';
 
-                card.innerHTML = `
-                    <div class="agent-card__header">
-                        <h3 class="agent-card__name">${agent.username}</h3>
-                        ${statusBadge}
-                    </div>
-                    <div class="agent-card__info">
-                        <div class="agent-card__info-item">
-                            <strong>Email:</strong> ${agent.email || 'N/A'}
-                        </div>
-                        <div class="agent-card__info-item">
-                            <strong>Name:</strong> ${agent.first_name || ''} ${agent.last_name || ''}
-                        </div>
-                        <div class="agent-card__info-item">
-                            <strong>Theme:</strong> ${themeIcon} ${agent.theme_preference}
-                        </div>
-                        <div class="agent-card__info-item">
-                            <strong>Last Synced:</strong> ${agent.last_synced_at ? new Date(agent.last_synced_at).toLocaleDateString() : 'Never'}
-                        </div>
-                    </div>
-                `;
+                const fullName = [agent.first_name, agent.last_name].filter(n => n).join(' ') || '-';
+                const lastSynced = agent.last_synced_at
+                    ? new Date(agent.last_synced_at).toLocaleDateString()
+                    : 'Never';
 
-                container.appendChild(card);
+                html += `
+                    <tr>
+                        <td><strong>${agent.username}</strong></td>
+                        <td>${fullName}</td>
+                        <td>${agent.email || 'N/A'}</td>
+                        <td>${statusBadge}</td>
+                        <td>${lastSynced}</td>
+                        <td>
+                            <button class="btn btn--small btn--primary" onclick="editAgent('${agent.keycloak_id}')">
+                                <span class="btn__label">
+                                    <i data-lucide="edit-2" class="btn__icon"></i>
+                                    Edit
+                                </span>
+                            </button>
+                        </td>
+                    </tr>
+                `;
             });
 
-            // Re-initialize Lucide icons after creating cards
+            html += `
+                        </tbody>
+                    </table>
+                </div>
+            `;
+
+            container.innerHTML = html;
+
+            // Re-initialize Lucide icons after creating table
             if (typeof lucide !== 'undefined') {
                 lucide.createIcons();
             }
