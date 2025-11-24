@@ -868,10 +868,10 @@ def sync_tickets():
         db.session.add(job)
         db.session.commit()
 
-        # Start background thread
+        # Start background thread with force-reconcile flag for immediate deletion detection
         thread = threading.Thread(
             target=run_sync_script,
-            args=(job_id, script_path, ['--provider', provider, '--type', 'tickets'])
+            args=(job_id, script_path, ['--provider', provider, '--type', 'tickets', '--force-reconcile'])
         )
         thread.daemon = True
         thread.start()

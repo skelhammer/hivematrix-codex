@@ -316,6 +316,9 @@ class TicketDetail(db.Model):
     conversations = db.Column(db.Text)  # JSON array of conversation entries
     notes = db.Column(db.Text)  # JSON array of internal notes
 
+    # Sync tracking - to detect deleted tickets
+    last_seen_at = db.Column(db.String(50))  # ISO timestamp of last sync that returned this ticket
+
     # Composite indexes for common query patterns
     __table_args__ = (
         db.UniqueConstraint('external_id', 'external_source', name='unique_ticket_external'),
@@ -326,6 +329,7 @@ class TicketDetail(db.Model):
         db.Index('idx_ticket_responder', 'responder_id'),
         db.Index('idx_ticket_group', 'group_id'),
         db.Index('idx_ticket_source', 'external_source'),
+        db.Index('idx_ticket_last_seen', 'last_seen_at'),
     )
 
 class SyncJob(db.Model):

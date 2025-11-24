@@ -644,7 +644,68 @@ def save_tickets(tickets: list, provider_name: str) -> int:
     return count
 
 
-def sync_provider(provider_name: str, sync_type: str, config, full_history: bool = False) -> dict:
+def reconcile_deleted_tickets(provider, provider_name: str) -> dict:
+    """
+    Reconcile tickets by doing a full query of active tickets from PSA.
+
+    This works like the old ticket-dash system:
+    1. Query PSA for ALL tickets with active status IDs
+    2. Save/update all those tickets in the database (updates statuses!)
+    3. Mark any database ticket NOT in the API results as 'deleted'
+
+    This is the only reliable way to detect deleted/spam tickets since Freshservice
+    doesn't return them in incremental syncs - they just disappear.
+
+    Args:
+        provider: PSA provider instance (already authenticated)
+        provider_name: PSA provider name (e.g., 'freshservice')
+
+    Returns:
+        Dict with 'updated' and 'deleted' counts
+    """
+    from app.psa.mappings import INVALID_STATUS_NAMES
+
+    log("  Running full reconciliation to detect deleted tickets...")
+
+    # Get ALL active tickets from PSA (no 'since' parameter = full active query)
+    # This queries for status:[2,3,8,9,10,13,19,23,26,27] - all active statuses
+    active_tickets_from_psa = provider.sync_tickets()
+
+    # Save all active tickets - this updates their statuses!
+    log(f"  Updating {len(active_tickets_from_psa)} active tickets from PSA...")
+    updated_count = save_tickets(active_tickets_from_psa, provider_name)
+
+    # Build set of ticket IDs that PSA says are currently active
+    psa_active_ticket_ids = {ticket.get('external_id') for ticket in active_tickets_from_psa if ticket.get('external_id')}
+    log(f"  PSA reports {len(psa_active_ticket_ids)} active tickets")
+
+    # Get all tickets from our database that should be active (not already closed/deleted)
+    CLOSED_STATUSES = ['closed', 'resolved', 'job_complete_bill', 'billing_complete'] + INVALID_STATUS_NAMES
+    db_active_tickets = TicketDetail.query.filter(
+        TicketDetail.external_source == provider_name,
+        TicketDetail.status.notin_(CLOSED_STATUSES)
+    ).all()
+
+    log(f"  Database has {len(db_active_tickets)} tickets in active statuses")
+
+    # Find tickets in database that are NOT in PSA results = deleted/spam tickets
+    deleted_count = 0
+    for ticket in db_active_tickets:
+        if ticket.external_id not in psa_active_ticket_ids:
+            log(f"  Marking ticket #{ticket.ticket_number} as deleted (not in PSA active query)")
+            ticket.status = 'deleted'
+            deleted_count += 1
+
+    if deleted_count > 0:
+        db.session.commit()
+        log(f"  Marked {deleted_count} tickets as deleted")
+    else:
+        log("  No deleted tickets found")
+
+    return {'updated': updated_count, 'deleted': deleted_count}
+
+
+def sync_provider(provider_name: str, sync_type: str, config, full_history: bool = False, force_reconcile: bool = False) -> dict:
     """
     Sync data from a PSA provider.
 
@@ -653,6 +714,7 @@ def sync_provider(provider_name: str, sync_type: str, config, full_history: bool
         sync_type: Type of sync ('companies', 'contacts', 'agents', 'tickets', 'all')
         config: ConfigParser with provider credentials
         full_history: For tickets, fetch all history instead of recent
+        force_reconcile: For tickets, always run full reconciliation regardless of sync counter
 
     Returns:
         Dict with sync results
@@ -725,6 +787,54 @@ def sync_provider(provider_name: str, sync_type: str, config, full_history: bool
                     results['counts']['tickets'] = count
                     log(f"  Synced {count} tickets")
 
+                    # Reconcile deleted tickets - either forced or alternating pattern
+                    # Force reconcile = always run (manual GUI button clicks)
+                    # Alternating = every other sync for scheduled syncs (detects deletes every 6 min)
+                    import os
+
+                    if force_reconcile:
+                        # Manual sync from GUI - always run full reconciliation
+                        log("  Running full reconciliation (forced by manual sync)")
+                        reconcile_results = reconcile_deleted_tickets(provider, provider_name)
+                        results['counts']['tickets_reconciled'] = reconcile_results['updated']
+                        results['counts']['tickets_cleaned'] = reconcile_results['deleted']
+                    else:
+                        # Scheduled sync - use alternating pattern to avoid rate limiting
+                        # Track sync count using a simple counter file
+                        sync_counter_file = os.path.join(app.instance_path, f'{provider_name}_sync_counter.txt')
+
+                        try:
+                            if os.path.exists(sync_counter_file):
+                                with open(sync_counter_file, 'r') as f:
+                                    sync_count = int(f.read().strip())
+                            else:
+                                sync_count = 0
+
+                            # Increment counter
+                            sync_count += 1
+
+                            # Save updated counter
+                            with open(sync_counter_file, 'w') as f:
+                                f.write(str(sync_count))
+
+                            # Run reconciliation every other sync (even numbers)
+                            if sync_count % 2 == 0:
+                                log(f"  Running full reconciliation (sync #{sync_count})")
+                                reconcile_results = reconcile_deleted_tickets(provider, provider_name)
+                                results['counts']['tickets_reconciled'] = reconcile_results['updated']
+                                results['counts']['tickets_cleaned'] = reconcile_results['deleted']
+                            else:
+                                log(f"  Skipping reconciliation (sync #{sync_count}, will run on next sync)")
+                                results['counts']['tickets_reconciled'] = 0
+                                results['counts']['tickets_cleaned'] = 0
+
+                        except (ValueError, IOError) as e:
+                            log(f"  Warning: Could not read sync counter, running reconciliation: {e}")
+                            # On error, just run reconciliation to be safe
+                            reconcile_results = reconcile_deleted_tickets(provider, provider_name)
+                            results['counts']['tickets_reconciled'] = reconcile_results['updated']
+                            results['counts']['tickets_cleaned'] = reconcile_results['deleted']
+
             except Exception as e:
                 error_msg = f"Error syncing {st}: {e}"
                 log(f"  ERROR: {error_msg}")
@@ -754,6 +864,8 @@ def main():
                        help='Type of data to sync (base = companies, contacts, agents without tickets)')
     parser.add_argument('--full-history', action='store_true',
                        help='For tickets, fetch all history instead of recent')
+    parser.add_argument('--force-reconcile', action='store_true',
+                       help='For tickets, always run full reconciliation to detect deleted tickets')
     parser.add_argument('--all-providers', action='store_true',
                        help='Sync all enabled providers')
     parser.add_argument('--list-providers', action='store_true',
@@ -797,7 +909,8 @@ def main():
                 provider_name,
                 args.type,
                 config,
-                full_history=args.full_history
+                full_history=args.full_history,
+                force_reconcile=args.force_reconcile
             )
             all_results.append(results)
 
