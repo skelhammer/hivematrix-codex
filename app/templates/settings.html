@@ -73,11 +73,13 @@
                     <div class="form-group">
                         <label for="color-theme-select" class="form-group__label">Accent Color:</label>
                         <select id="color-theme-select" class="form-group__select" onchange="selectColorTheme()">
-                            <option value="purple">Modern Purple (Default)</option>
-                            <option value="blue">Modern Blue</option>
-                            <option value="green">Modern Green</option>
-                            <option value="orange">Modern Orange</option>
-                            <option value="gold">Modern Gold (Integotec)</option>
+                            <option value="purple">Purple (Default)</option>
+                            <option value="blue">Blue</option>
+                            <option value="green">Green</option>
+                            <option value="orange">Orange</option>
+                            <option value="gold">Gold</option>
+                            <option value="red">Red</option>
+                            <option value="yellow">Yellow</option>
                         </select>
                     </div>
 
@@ -100,8 +102,16 @@
                             <span class="color-preview__label">Orange</span>
                         </div>
                         <div class="color-preview" data-color="gold" onclick="selectColorThemeByClick('gold')">
-                            <div class="color-preview__swatch" style="background: linear-gradient(135deg, #05f29b 0%, #34faa8 100%)"></div>
+                            <div class="color-preview__swatch" style="background: linear-gradient(135deg, #B39B7E 0%, #C9B697 100%)"></div>
                             <span class="color-preview__label">Gold</span>
+                        </div>
+                        <div class="color-preview" data-color="red" onclick="selectColorThemeByClick('red')">
+                            <div class="color-preview__swatch" style="background: linear-gradient(135deg, #dc2626 0%, #ef4444 100%)"></div>
+                            <span class="color-preview__label">Red</span>
+                        </div>
+                        <div class="color-preview" data-color="yellow" onclick="selectColorThemeByClick('yellow')">
+                            <div class="color-preview__swatch" style="background: linear-gradient(135deg, #eab308 0%, #fbbf24 100%)"></div>
+                            <span class="color-preview__label">Yellow</span>
                         </div>
                     </div>
                 </div>
