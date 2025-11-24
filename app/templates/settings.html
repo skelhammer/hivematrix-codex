@@ -307,7 +307,10 @@
                     savedTheme = currentTheme;
                     savedColorTheme = currentColorTheme;
                     savedHomePage = currentHomePage;
-                    showToast('Settings saved successfully!', 'success');
+
+                    // Apply theme changes immediately without reload
+                    document.documentElement.setAttribute('data-theme', currentTheme);
+                    document.documentElement.setAttribute('data-color-theme', currentColorTheme);
 
                     // Invalidate Nexus cache so next page load uses new theme
                     try {
@@ -320,10 +323,8 @@
                         console.warn('Failed to invalidate cache:', cacheError);
                     }
 
-                    // Reload page after 1 second to apply theme globally
-                    setTimeout(() => {
-                        window.location.reload();
-                    }, 1000);
+                    showToast('Settings saved successfully!', 'success');
+                    document.getElementById('save-status').innerHTML = '<span class="u-text-success">✓ Saved</span>';
                 } else {
                     showToast(`Error: ${result.error || 'Failed to save settings'}`, 'error');
                 }
