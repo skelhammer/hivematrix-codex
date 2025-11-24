@@ -133,7 +133,8 @@ def sync_agents_from_keycloak():
                         first_name=kc_user.get('firstName', ''),
                         last_name=kc_user.get('lastName', ''),
                         enabled=kc_user.get('enabled', True),
-                        theme_preference='light',  # Default theme
+                        theme_preference='light',  # Default light/dark theme
+                        preferred_color_theme='purple',  # Default color theme
                         created_at=now,
                         updated_at=now,
                         last_synced_at=now
@@ -215,6 +216,12 @@ def update_agent_settings(keycloak_id):
             return {'error': 'Invalid theme. Must be "light" or "dark"'}, 400
         agent.theme_preference = theme
 
+    if 'preferred_color_theme' in data:
+        color_theme = data['preferred_color_theme']
+        if color_theme not in ['purple', 'blue', 'green', 'orange', 'gold']:
+            return {'error': 'Invalid color theme. Must be one of: purple, blue, green, orange, gold'}, 400
+        agent.preferred_color_theme = color_theme
+
     agent.updated_at = datetime.utcnow().isoformat()
 
     try:
@@ -256,6 +263,7 @@ def get_my_settings():
         # Agent not yet synced, return defaults
         return jsonify({
             'theme_preference': 'light',
+            'preferred_color_theme': 'purple',
             'knowledgetree_view_preference': 'grid',
             'home_page_preference': 'beacon',
             'synced': False
@@ -263,6 +271,7 @@ def get_my_settings():
 
     return jsonify({
         'theme_preference': agent.theme_preference,
+        'preferred_color_theme': agent.preferred_color_theme or 'purple',
         'knowledgetree_view_preference': agent.knowledgetree_view_preference,
         'home_page_preference': agent.home_page_preference or 'beacon',
         'username': agent.username,
@@ -295,12 +304,19 @@ def update_my_settings():
     if not data:
         return {'error': 'No data provided'}, 400
 
-    # Update theme preference
+    # Update theme preference (light/dark)
     if 'theme_preference' in data:
         theme = data['theme_preference']
         if theme not in ['light', 'dark']:
             return {'error': 'Invalid theme. Must be "light" or "dark"'}, 400
         agent.theme_preference = theme
+
+    # Update color theme preference
+    if 'preferred_color_theme' in data:
+        color_theme = data['preferred_color_theme']
+        if color_theme not in ['purple', 'blue', 'green', 'orange', 'gold']:
+            return {'error': 'Invalid color theme. Must be one of: purple, blue, green, orange, gold'}, 400
+        agent.preferred_color_theme = color_theme
 
     # Update KnowledgeTree view preference
     if 'knowledgetree_view_preference' in data:
@@ -325,6 +341,7 @@ def update_my_settings():
             'success': True,
             'message': 'Settings updated successfully',
             'theme_preference': agent.theme_preference,
+            'preferred_color_theme': agent.preferred_color_theme,
             'knowledgetree_view_preference': agent.knowledgetree_view_preference,
             'home_page_preference': agent.home_page_preference
         })
@@ -351,16 +368,25 @@ def get_user_theme():
 
     if not user_email:
         # Default to light theme if no user email
-        return jsonify({'theme': 'light', 'source': 'default'})
+        return jsonify({
+            'theme': 'light',
+            'color_theme': 'purple',
+            'source': 'default'
+        })
 
     agent = Agent.query.filter_by(email=user_email).first()
 
     if not agent:
         # Agent not synced yet, return default
-        return jsonify({'theme': 'light', 'source': 'default'})
+        return jsonify({
+            'theme': 'light',
+            'color_theme': 'purple',
+            'source': 'default'
+        })
 
     return jsonify({
         'theme': agent.theme_preference,
+        'color_theme': agent.preferred_color_theme or 'purple',
         'source': 'codex',
         'email': agent.email
     })

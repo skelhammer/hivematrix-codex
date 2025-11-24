@@ -440,6 +440,7 @@ class Agent(db.Model):
 
     # User settings - stored in Codex, not Keycloak
     theme_preference = db.Column(db.String(20), default='light')  # 'light' or 'dark'
+    preferred_color_theme = db.Column(db.String(20), default='purple')  # 'purple', 'blue', 'green', 'orange', 'gold'
     knowledgetree_view_preference = db.Column(db.String(20), default='grid')  # 'grid', 'tree', or 'hierarchy'
     home_page_preference = db.Column(db.String(50), default='beacon')  # Service slug for home page
 
@@ -458,6 +459,7 @@ class Agent(db.Model):
             'last_name': self.last_name,
             'enabled': self.enabled,
             'theme_preference': self.theme_preference,
+            'preferred_color_theme': self.preferred_color_theme,
             'knowledgetree_view_preference': self.knowledgetree_view_preference,
             'home_page_preference': self.home_page_preference,
             'created_at': self.created_at,

@@ -63,6 +63,48 @@
                         <div class="theme-option__indicator"></div>
                     </div>
                 </div>
+
+                <!-- Color Theme Selector -->
+                <div class="u-mt-2">
+                    <p class="u-text-secondary u-mb-1">
+                        Choose your preferred color accent. Works with both light and dark modes.
+                    </p>
+
+                    <div class="form-group">
+                        <label for="color-theme-select" class="form-group__label">Accent Color:</label>
+                        <select id="color-theme-select" class="form-group__select" onchange="selectColorTheme()">
+                            <option value="purple">Modern Purple (Default)</option>
+                            <option value="blue">Modern Blue</option>
+                            <option value="green">Modern Green</option>
+                            <option value="orange">Modern Orange</option>
+                            <option value="gold">Modern Gold (Integotec)</option>
+                        </select>
+                    </div>
+
+                    <!-- Color Theme Preview Swatches -->
+                    <div class="color-preview-grid">
+                        <div class="color-preview" data-color="purple" onclick="selectColorThemeByClick('purple')">
+                            <div class="color-preview__swatch" style="background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)"></div>
+                            <span class="color-preview__label">Purple</span>
+                        </div>
+                        <div class="color-preview" data-color="blue" onclick="selectColorThemeByClick('blue')">
+                            <div class="color-preview__swatch" style="background: linear-gradient(135deg, #0ea5e9 0%, #06b6d4 100%)"></div>
+                            <span class="color-preview__label">Blue</span>
+                        </div>
+                        <div class="color-preview" data-color="green" onclick="selectColorThemeByClick('green')">
+                            <div class="color-preview__swatch" style="background: linear-gradient(135deg, #10b981 0%, #34d399 100%)"></div>
+                            <span class="color-preview__label">Green</span>
+                        </div>
+                        <div class="color-preview" data-color="orange" onclick="selectColorThemeByClick('orange')">
+                            <div class="color-preview__swatch" style="background: linear-gradient(135deg, #f97316 0%, #fb923c 100%)"></div>
+                            <span class="color-preview__label">Orange</span>
+                        </div>
+                        <div class="color-preview" data-color="gold" onclick="selectColorThemeByClick('gold')">
+                            <div class="color-preview__swatch" style="background: linear-gradient(135deg, #05f29b 0%, #34faa8 100%)"></div>
+                            <span class="color-preview__label">Gold</span>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <div class="section-divider"></div>
@@ -122,6 +164,8 @@
 
         let currentTheme = 'light';
         let savedTheme = 'light';
+        let currentColorTheme = 'purple';
+        let savedColorTheme = 'purple';
         let currentHomePage = 'helm';
         let savedHomePage = 'helm';
 
@@ -147,6 +191,10 @@
                     currentTheme = data.theme_preference || 'light';
                     savedTheme = currentTheme;
                     selectTheme(currentTheme, false);
+
+                    currentColorTheme = data.preferred_color_theme || 'purple';
+                    savedColorTheme = currentColorTheme;
+                    selectColorTheme(currentColorTheme, false);
 
                     currentHomePage = data.home_page_preference || 'helm';
                     savedHomePage = currentHomePage;
@@ -178,9 +226,37 @@
             }
         }
 
+        function selectColorTheme(colorTheme, markUnsaved = true) {
+            if (typeof colorTheme !== 'string') {
+                // Called from onchange event - get value from select
+                colorTheme = document.getElementById('color-theme-select').value;
+            }
+
+            currentColorTheme = colorTheme;
+
+            // Update dropdown
+            document.getElementById('color-theme-select').value = colorTheme;
+
+            // Update color preview selections
+            document.querySelectorAll('.color-preview').forEach(preview => {
+                preview.classList.toggle('selected', preview.dataset.color === colorTheme);
+            });
+
+            // Apply color theme immediately for preview
+            document.documentElement.setAttribute('data-color-theme', colorTheme);
+
+            if (markUnsaved && colorTheme !== savedColorTheme) {
+                document.getElementById('save-status').innerHTML = '<span class="u-text-warning">Unsaved changes</span>';
+            }
+        }
+
+        function selectColorThemeByClick(colorTheme) {
+            selectColorTheme(colorTheme, true);
+        }
+
         function markUnsaved() {
             currentHomePage = document.getElementById('home-page-select').value;
-            if (currentHomePage !== savedHomePage || currentTheme !== savedTheme) {
+            if (currentHomePage !== savedHomePage || currentTheme !== savedTheme || currentColorTheme !== savedColorTheme) {
                 document.getElementById('save-status').innerHTML = '<span class="u-text-warning">Unsaved changes</span>';
             } else {
                 document.getElementById('save-status').textContent = '';
@@ -204,6 +280,7 @@
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({
                         theme_preference: currentTheme,
+                        preferred_color_theme: currentColorTheme,
                         home_page_preference: currentHomePage
                     }),
                     credentials: 'same-origin'
@@ -213,6 +290,7 @@
 
                 if (response.ok && result.success) {
                     savedTheme = currentTheme;
+                    savedColorTheme = currentColorTheme;
                     savedHomePage = currentHomePage;
                     showToast('Settings saved successfully!', 'success');
 
