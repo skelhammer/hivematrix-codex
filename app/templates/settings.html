@@ -70,20 +70,6 @@
                         Choose your preferred color accent. Works with both light and dark modes.
                     </p>
 
-                    <div class="form-group">
-                        <label for="color-theme-select" class="form-group__label">Accent Color:</label>
-                        <select id="color-theme-select" class="form-group__select" onchange="selectColorTheme()">
-                            <option value="purple">Purple (Default)</option>
-                            <option value="blue">Blue</option>
-                            <option value="green">Forest Green</option>
-                            <option value="orange">Orange</option>
-                            <option value="gold">Gold</option>
-                            <option value="red">Red</option>
-                            <option value="yellow">Yellow</option>
-                            <option value="matrix">Matrix Green</option>
-                        </select>
-                    </div>
-
                     <!-- Color Theme Preview Swatches -->
                     <div class="color-preview-grid">
                         <div class="color-preview" data-color="purple" onclick="selectColorThemeByClick('purple')">
@@ -229,12 +215,9 @@
         function selectTheme(theme, markUnsaved = true) {
             currentTheme = theme;
 
-            // Update UI
+            // Update UI selection indicators
             document.getElementById('theme-light').classList.toggle('selected', theme === 'light');
             document.getElementById('theme-dark').classList.toggle('selected', theme === 'dark');
-
-            // Apply theme immediately for preview
-            document.documentElement.setAttribute('data-theme', theme);
 
             if (markUnsaved && theme !== savedTheme) {
                 document.getElementById('save-status').innerHTML = '<span class="u-text-warning">Unsaved changes</span>';
@@ -242,23 +225,12 @@
         }
 
         function selectColorTheme(colorTheme, markUnsaved = true) {
-            if (typeof colorTheme !== 'string') {
-                // Called from onchange event - get value from select
-                colorTheme = document.getElementById('color-theme-select').value;
-            }
-
             currentColorTheme = colorTheme;
 
-            // Update dropdown
-            document.getElementById('color-theme-select').value = colorTheme;
-
-            // Update color preview selections
+            // Update color preview selection indicators
             document.querySelectorAll('.color-preview').forEach(preview => {
                 preview.classList.toggle('selected', preview.dataset.color === colorTheme);
             });
-
-            // Apply color theme immediately for preview
-            document.documentElement.setAttribute('data-color-theme', colorTheme);
 
             if (markUnsaved && colorTheme !== savedColorTheme) {
                 document.getElementById('save-status').innerHTML = '<span class="u-text-warning">Unsaved changes</span>';
