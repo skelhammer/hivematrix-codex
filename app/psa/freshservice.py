@@ -304,17 +304,129 @@ class FreshserviceProvider(PSAProvider):
 
     # ========== Ticket Methods ==========
 
+    def sync_tickets_light(self) -> List[Dict[str, Any]]:
+        """
+        Light sync: Fetch active tickets from Freshservice filter endpoint only.
+
+        This is optimized for Beacon dashboard - no individual ticket API calls.
+        Only fetches data available in the /tickets/filter response.
+
+        API calls: ~2 per 100 tickets (pagination only)
+
+        Returns:
+            List of normalized ticket dicts (display fields only)
+        """
+        tickets = []
+
+        # Query for all active (non-closed) tickets
+        active_statuses = [2, 3, 8, 9, 10, 13, 19, 23, 26, 27]
+        status_conditions = [f"status:{s}" for s in active_statuses]
+        query = f'"({" OR ".join(status_conditions)})"'
+        print("Light sync: Fetching all active tickets from filter...")
+
+        page = 1
+        per_page = 100
+
+        while True:
+            response = self._api_get(
+                '/tickets/filter',
+                params={
+                    'query': query,
+                    'page': page,
+                    'per_page': per_page
+                }
+            )
+
+            ticket_list = response.get('tickets', [])
+            if not ticket_list:
+                break
+
+            for ticket in ticket_list:
+                # Normalize directly from filter response - NO individual API calls
+                tickets.append(self._normalize_ticket_light(ticket))
+
+            print(f"  -> Fetched page {page}, total tickets: {len(tickets)}")
+
+            if len(ticket_list) < per_page:
+                break
+            page += 1
+            time.sleep(0.5)  # Rate limit protection between pages
+
+        return tickets
+
+    def sync_tickets_detail(self, since_hours: int = 48) -> List[Dict[str, Any]]:
+        """
+        Detail sync: Fetch full ticket details for recently updated tickets.
+
+        This is optimized for Ledger billing - fetches conversations, notes, and time entries
+        but only for tickets updated in the last N hours.
+
+        API calls: ~2N + P (where N = tickets updated recently, P = pages)
+
+        Args:
+            since_hours: Only fetch tickets updated in the last N hours (default 48)
+
+        Returns:
+            List of normalized ticket dicts with full details
+        """
+        from datetime import datetime, timedelta, timezone
+
+        tickets = []
+
+        # Calculate timestamp for 'since' filter
+        since_dt = datetime.now(timezone.utc) - timedelta(hours=since_hours)
+        since_formatted = since_dt.strftime('%Y-%m-%dT%H:%M:%SZ')
+
+        query = f'"updated_at:>\'{since_formatted}\'"'
+        print(f"Detail sync: Fetching tickets updated since {since_formatted}...")
+
+        page = 1
+        per_page = 100
+
+        while True:
+            response = self._api_get(
+                '/tickets/filter',
+                params={
+                    'query': query,
+                    'page': page,
+                    'per_page': per_page
+                }
+            )
+
+            ticket_list = response.get('tickets', [])
+            if not ticket_list:
+                break
+
+            for ticket in ticket_list:
+                # Fetch FULL ticket details including conversations and time entries
+                full_ticket = self.get_ticket(ticket.get('id'))
+                if full_ticket:
+                    tickets.append(full_ticket)
+
+            print(f"  -> Fetched page {page}, total tickets: {len(tickets)}")
+
+            if len(ticket_list) < per_page:
+                break
+            page += 1
+            time.sleep(1)  # Rate limit protection between pages
+
+        return tickets
+
     def sync_tickets(self, since: Optional[str] = None,
                      full_history: bool = False) -> List[Dict[str, Any]]:
         """
-        Fetch tickets from Freshservice.
+        Full sync: Fetch tickets with complete details from Freshservice.
+
+        This fetches all data including conversations, notes, and time entries.
+        Use sync_tickets_light() for Beacon dashboard (much faster).
+        Use sync_tickets_detail() for Ledger billing updates (recent tickets only).
 
         Args:
             since: ISO timestamp to fetch tickets updated after
-            full_history: If True, fetch all tickets
+            full_history: If True, fetch all tickets ever created
 
         Returns:
-            List of normalized ticket dicts
+            List of normalized ticket dicts with full details
         """
         tickets = []
 
@@ -379,6 +491,47 @@ class FreshserviceProvider(PSAProvider):
             time.sleep(1)  # Rate limit protection between pages
 
         return tickets
+
+    def _normalize_ticket_light(self, ticket: Dict) -> Dict[str, Any]:
+        """
+        Normalize ticket from filter response (light sync).
+
+        This only includes fields available in /tickets/filter response.
+        Does NOT include: stats (first_responded_at), conversations, notes, time_entries.
+        """
+        status_id = ticket.get('status')
+        closed_at = ticket.get('updated_at') if status_id == 5 else None
+
+        return {
+            'external_id': ticket.get('id'),
+            'ticket_number': str(ticket.get('id')),
+            'subject': ticket.get('subject'),
+            'description': ticket.get('description'),
+            'description_text': strip_html(ticket.get('description_text') or ticket.get('description', '')),
+            'status': self.map_status(status_id),
+            'status_id': status_id,
+            'priority': self.map_priority(ticket.get('priority')),
+            'priority_id': ticket.get('priority'),
+            'ticket_type': ticket.get('type', 'Incident'),
+            'requester_id': ticket.get('requester_id'),
+            'requester_email': None,  # Not in filter response
+            'requester_name': None,   # Not in filter response
+            'responder_id': ticket.get('responder_id'),
+            'group_id': ticket.get('group_id'),
+            'company_id': ticket.get('department_id'),
+            'created_at': ticket.get('created_at'),
+            'updated_at': ticket.get('updated_at'),
+            'closed_at': closed_at,
+            'fr_due_by': ticket.get('fr_due_by'),
+            'due_by': ticket.get('due_by'),
+            # These require individual ticket fetch with ?include=stats
+            'first_responded_at': None,
+            'agent_responded_at': None,
+            # These require separate API calls - preserved from existing data
+            'conversations': None,
+            'notes': None,
+            'total_hours_spent': None,  # Will be preserved from existing data
+        }
 
     def get_ticket(self, external_id: int) -> Optional[Dict[str, Any]]:
         """Fetch a single ticket with full details."""

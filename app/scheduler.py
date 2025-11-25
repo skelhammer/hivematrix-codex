@@ -132,14 +132,17 @@ def run_sync_script(script_name):
                     db.session.commit()
 
 
-def run_psa_sync(provider: str, sync_type: str = 'all', full_history: bool = False):
+def run_psa_sync(provider: str, sync_type: str = 'all', full_history: bool = False,
+                 light_sync: bool = False, detail_sync: bool = False):
     """
     Run PSA sync using the unified sync_psa.py script.
 
     Args:
         provider: PSA provider name ('freshservice', 'superops')
         sync_type: Type of sync ('companies', 'contacts', 'agents', 'tickets', 'all')
-        full_history: For tickets, fetch all history
+        full_history: For tickets, fetch ALL tickets ever (manual only)
+        light_sync: For tickets, use light sync mode (filter only, for Beacon)
+        detail_sync: For tickets, use detail sync mode (full details for recent tickets, for Ledger)
     """
     global _app
 
@@ -151,12 +154,18 @@ def run_psa_sync(provider: str, sync_type: str = 'all', full_history: bool = Fal
         if not os.path.exists(python_path):
             python_path = 'python3'
 
-        logger.info(f"Running PSA sync: provider={provider}, type={sync_type}")
+        # Determine sync mode for logging
+        mode = 'light' if light_sync else ('detail' if detail_sync else ('full-history' if full_history else 'full'))
+        logger.info(f"Running PSA sync: provider={provider}, type={sync_type}, mode={mode}")
 
         # Build command
         cmd = [python_path, script_path, '--provider', provider, '--type', sync_type]
         if full_history:
             cmd.append('--full-history')
+        if light_sync:
+            cmd.append('--light')
+        if detail_sync:
+            cmd.append('--detail')
 
         job_id = None
 
@@ -312,37 +321,73 @@ def init_scheduler(app):
                 logger.info("Scheduled RMM sync: Every hour")
 
         # Schedule Tickets sync (uses PSA provider system)
+        # 3-tier architecture:
+        #   - Light sync: Every 5 min for Beacon dashboard (fast, filter-only)
+        #   - Detail sync: Daily at 2 AM for Ledger billing (full ticket details)
         if tickets_enabled:
             # Get default PSA provider for tickets
             default_provider = app.config.get('PSA_DEFAULT_PROVIDER', 'freshservice')
 
             if tickets_schedule == 'frequent':
+                # TIER 1: Light sync for Beacon - every 5 minutes
+                # Uses filter endpoint only, no individual ticket API calls
+                # Detects deleted tickets automatically
                 scheduler.add_job(
-                    func=lambda: run_psa_sync(default_provider, 'tickets'),
-                    trigger=IntervalTrigger(minutes=3),
-                    id='tickets_sync',
-                    name='Sync Tickets',
+                    func=lambda: run_psa_sync(default_provider, 'tickets', light_sync=True),
+                    trigger=IntervalTrigger(minutes=5),
+                    id='tickets_light_sync',
+                    name='Sync Tickets (Light - Beacon)',
                     replace_existing=True
                 )
-                logger.info(f"Scheduled Tickets sync ({default_provider}): Every 3 minutes")
+                logger.info(f"Scheduled Tickets light sync ({default_provider}): Every 5 minutes")
+
+                # TIER 2: Detail sync for Ledger - daily at 2 AM
+                # Fetches full ticket details (conversations, notes, time entries)
+                # for tickets updated in last 48 hours
+                scheduler.add_job(
+                    func=lambda: run_psa_sync(default_provider, 'tickets', detail_sync=True),
+                    trigger=CronTrigger(hour=2, minute=30),  # 2:30 AM daily
+                    id='tickets_detail_sync',
+                    name='Sync Tickets (Detail - Ledger)',
+                    replace_existing=True
+                )
+                logger.info(f"Scheduled Tickets detail sync ({default_provider}): Daily at 2:30 AM")
+
             elif tickets_schedule == 'hourly':
+                # Hourly mode: light sync every 5 min, detail sync hourly
                 scheduler.add_job(
-                    func=lambda: run_psa_sync(default_provider, 'tickets'),
+                    func=lambda: run_psa_sync(default_provider, 'tickets', light_sync=True),
+                    trigger=IntervalTrigger(minutes=5),
+                    id='tickets_light_sync',
+                    name='Sync Tickets (Light - Beacon)',
+                    replace_existing=True
+                )
+                scheduler.add_job(
+                    func=lambda: run_psa_sync(default_provider, 'tickets', detail_sync=True),
                     trigger=IntervalTrigger(hours=1),
-                    id='tickets_sync',
-                    name='Sync Tickets',
+                    id='tickets_detail_sync',
+                    name='Sync Tickets (Detail - Ledger)',
                     replace_existing=True
                 )
-                logger.info(f"Scheduled Tickets sync ({default_provider}): Every hour")
+                logger.info(f"Scheduled Tickets sync ({default_provider}): Light every 5 min, Detail hourly")
+
             elif tickets_schedule == 'daily':
+                # Daily mode: light sync every 5 min, detail sync daily
                 scheduler.add_job(
-                    func=lambda: run_psa_sync(default_provider, 'tickets'),
-                    trigger=CronTrigger(hour=4, minute=0),  # 4:00 AM daily
-                    id='tickets_sync',
-                    name='Sync Tickets',
+                    func=lambda: run_psa_sync(default_provider, 'tickets', light_sync=True),
+                    trigger=IntervalTrigger(minutes=5),
+                    id='tickets_light_sync',
+                    name='Sync Tickets (Light - Beacon)',
                     replace_existing=True
                 )
-                logger.info(f"Scheduled Tickets sync ({default_provider}): Daily at 4:00 AM")
+                scheduler.add_job(
+                    func=lambda: run_psa_sync(default_provider, 'tickets', detail_sync=True),
+                    trigger=CronTrigger(hour=2, minute=30),  # 2:30 AM daily
+                    id='tickets_detail_sync',
+                    name='Sync Tickets (Detail - Ledger)',
+                    replace_existing=True
+                )
+                logger.info(f"Scheduled Tickets sync ({default_provider}): Light every 5 min, Detail daily at 2:30 AM")
 
         # Run initial sync on startup if enabled
         run_on_startup = app.config.get('SYNC_RUN_ON_STARTUP', False)

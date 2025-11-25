@@ -534,7 +534,7 @@ def save_agents(agents: list, provider_name: str) -> int:
 
 def save_tickets(tickets: list, provider_name: str) -> int:
     """
-    Save normalized ticket data to database.
+    Save normalized ticket data to database (full sync).
     Deletes tickets with spam/deleted/trash status.
 
     Args:
@@ -644,6 +644,147 @@ def save_tickets(tickets: list, provider_name: str) -> int:
     return count
 
 
+def save_tickets_light(tickets: list, provider_name: str) -> dict:
+    """
+    Save ticket data from light sync (filter response only).
+
+    This preserves existing detail data (conversations, notes, time entries, stats)
+    while updating display fields from the filter response.
+
+    Also detects deleted tickets: any active ticket in DB not in the API results
+    is marked as 'deleted'.
+
+    Args:
+        tickets: List of normalized ticket dicts from light sync
+        provider_name: Name of the PSA provider
+
+    Returns:
+        Dict with 'updated', 'created', 'deleted' counts
+    """
+    from app.psa.mappings import INVALID_STATUS_NAMES
+
+    # Build company mapping (external_id -> account_number)
+    company_map = {}
+    companies = Company.query.filter_by(external_source=provider_name).all()
+    for company in companies:
+        if company.external_id:
+            company_map[company.external_id] = company.account_number
+
+    created_count = 0
+    updated_count = 0
+    deleted_count = 0
+
+    # Track which tickets we see from the API
+    seen_ticket_ids = set()
+
+    for ticket_data in tickets:
+        external_id = ticket_data.get('external_id')
+        if not external_id:
+            continue
+
+        seen_ticket_ids.add(external_id)
+
+        # Get normalized status (mapped from status_id by provider)
+        status = ticket_data.get('status', '').lower()
+
+        # Find existing ticket
+        ticket = TicketDetail.query.filter_by(
+            external_id=external_id,
+            external_source=provider_name
+        ).first()
+
+        # If ticket is spam/deleted/trash, delete it from Codex
+        if status in INVALID_STATUS_NAMES:
+            if ticket:
+                log(f"  Deleting ticket #{ticket_data.get('ticket_number')} - status: {status}")
+                db.session.delete(ticket)
+                deleted_count += 1
+            continue
+
+        is_new = False
+        if not ticket:
+            ticket = TicketDetail()
+            db.session.add(ticket)
+            is_new = True
+            created_count += 1
+        else:
+            updated_count += 1
+
+        # Always update display fields from filter response
+        ticket.external_id = external_id
+        ticket.external_source = provider_name
+        ticket.ticket_number = ticket_data.get('ticket_number')
+        ticket.subject = ticket_data.get('subject')
+        ticket.description = ticket_data.get('description')
+        ticket.description_text = ticket_data.get('description_text')
+
+        # Normalized status/priority
+        ticket.status = ticket_data.get('status')
+        ticket.priority = ticket_data.get('priority')
+
+        # Original PSA values
+        ticket.status_id = ticket_data.get('status_id')
+        ticket.priority_id = ticket_data.get('priority_id')
+
+        ticket.ticket_type = ticket_data.get('ticket_type')
+        ticket.requester_id = ticket_data.get('requester_id')
+        ticket.responder_id = ticket_data.get('responder_id')
+        ticket.group_id = ticket_data.get('group_id')
+
+        # Map company
+        company_external_id = ticket_data.get('company_id')
+        if company_external_id and company_external_id in company_map:
+            ticket.company_account_number = company_map[company_external_id]
+
+        # Timestamps
+        ticket.created_at = ticket_data.get('created_at')
+        ticket.last_updated_at = ticket_data.get('updated_at')
+        ticket.closed_at = ticket_data.get('closed_at')
+
+        # SLA fields (available in filter response)
+        ticket.fr_due_by = ticket_data.get('fr_due_by')
+        ticket.due_by = ticket_data.get('due_by')
+
+        # PRESERVE existing detail data - don't overwrite with None
+        # These fields are only updated by detail sync or full sync
+        # first_responded_at, agent_responded_at - only update if provided
+        if ticket_data.get('first_responded_at') is not None:
+            ticket.first_responded_at = ticket_data.get('first_responded_at')
+        if ticket_data.get('agent_responded_at') is not None:
+            ticket.agent_responded_at = ticket_data.get('agent_responded_at')
+
+        # Preserve existing requester info if not provided
+        if ticket_data.get('requester_email') is not None:
+            ticket.requester_email = ticket_data.get('requester_email')
+        if ticket_data.get('requester_name') is not None:
+            ticket.requester_name = ticket_data.get('requester_name')
+
+        # Don't touch: total_hours_spent, conversations, notes
+        # These are only updated by detail sync
+
+    # DELETED TICKET DETECTION
+    # Any ticket in DB that's "active" but NOT in API results = deleted/closed in Freshservice
+    CLOSED_STATUSES = ['closed', 'resolved', 'job_complete_bill', 'billing_complete'] + INVALID_STATUS_NAMES
+    db_active_tickets = TicketDetail.query.filter(
+        TicketDetail.external_source == provider_name,
+        TicketDetail.status.notin_(CLOSED_STATUSES)
+    ).all()
+
+    for ticket in db_active_tickets:
+        if ticket.external_id not in seen_ticket_ids:
+            log(f"  Marking ticket #{ticket.ticket_number} as deleted (not in PSA active query)")
+            ticket.status = 'deleted'
+            deleted_count += 1
+
+    db.session.commit()
+
+    return {
+        'created': created_count,
+        'updated': updated_count,
+        'deleted': deleted_count
+    }
+
+
 def reconcile_deleted_tickets(provider, provider_name: str) -> dict:
     """
     Reconcile tickets by doing a full query of active tickets from PSA.
@@ -705,7 +846,9 @@ def reconcile_deleted_tickets(provider, provider_name: str) -> dict:
     return {'updated': updated_count, 'deleted': deleted_count}
 
 
-def sync_provider(provider_name: str, sync_type: str, config, full_history: bool = False, force_reconcile: bool = False) -> dict:
+def sync_provider(provider_name: str, sync_type: str, config, full_history: bool = False,
+                  force_reconcile: bool = False, light_sync: bool = False,
+                  detail_sync: bool = False) -> dict:
     """
     Sync data from a PSA provider.
 
@@ -713,8 +856,10 @@ def sync_provider(provider_name: str, sync_type: str, config, full_history: bool
         provider_name: Name of the provider ('freshservice', 'superops')
         sync_type: Type of sync ('companies', 'contacts', 'agents', 'tickets', 'all')
         config: ConfigParser with provider credentials
-        full_history: For tickets, fetch all history instead of recent
-        force_reconcile: For tickets, always run full reconciliation regardless of sync counter
+        full_history: For tickets, fetch ALL tickets ever created with full details
+        force_reconcile: For tickets, always run full reconciliation (legacy, not needed with light sync)
+        light_sync: For tickets, use light sync mode (filter only, no individual ticket API calls)
+        detail_sync: For tickets, use detail sync mode (fetch full details for recently updated tickets)
 
     Returns:
         Dict with sync results
@@ -768,69 +913,57 @@ def sync_provider(provider_name: str, sync_type: str, config, full_history: bool
                     log(f"  Synced {count} agents")
 
                 elif st == 'tickets':
-                    # Incremental sync: only fetch tickets updated since last sync
-                    if full_history:
-                        log("  Full history sync requested")
+                    # 3-tier ticket sync architecture:
+                    # 1. Light sync (--light): Fast, filter-only, for Beacon dashboard (every 5 min)
+                    # 2. Detail sync (--detail): Full details for recent tickets, for Ledger billing (daily)
+                    # 3. Full history (--full-history): All tickets ever, manual only
+
+                    if light_sync:
+                        # TIER 1: Light sync for Beacon
+                        # - Only calls /tickets/filter (no individual ticket fetches)
+                        # - Preserves existing detail data (hours, conversations, notes)
+                        # - Detects deleted tickets automatically (every sync is reconciliation)
+                        log("  Light sync mode: Fetching active tickets from filter...")
+                        data = provider.sync_tickets_light()
+                        sync_results = save_tickets_light(data, provider_name)
+                        results['counts']['tickets_created'] = sync_results['created']
+                        results['counts']['tickets_updated'] = sync_results['updated']
+                        results['counts']['tickets_deleted'] = sync_results['deleted']
+                        results['counts']['tickets'] = sync_results['created'] + sync_results['updated']
+                        log(f"  Light sync complete: {sync_results['created']} created, {sync_results['updated']} updated, {sync_results['deleted']} deleted")
+
+                    elif detail_sync:
+                        # TIER 2: Detail sync for Ledger billing
+                        # - Fetches full ticket details for recently updated tickets (last 48 hours)
+                        # - Updates total_hours_spent, conversations, notes
+                        log("  Detail sync mode: Fetching full details for recently updated tickets...")
+                        data = provider.sync_tickets_detail(since_hours=48)
+                        count = save_tickets(data, provider_name)
+                        results['counts']['tickets'] = count
+                        log(f"  Detail sync complete: {count} tickets updated with full details")
+
+                    elif full_history:
+                        # TIER 3: Full history sync (manual)
+                        # - Fetches ALL tickets ever created with full details
+                        # - Use for initial data load or disaster recovery
+                        log("  Full history sync: Fetching ALL tickets with full details...")
                         data = provider.sync_tickets(full_history=True)
+                        count = save_tickets(data, provider_name)
+                        results['counts']['tickets'] = count
+                        log(f"  Full history sync complete: {count} tickets")
+
                     else:
-                        # Get last successful sync time
-                        last_sync_time = get_last_ticket_sync_time(provider_name)
-                        if last_sync_time:
-                            log(f"  Incremental sync since {last_sync_time}")
-                            data = provider.sync_tickets(since=last_sync_time)
-                        else:
-                            # No previous sync - fetch all open tickets
-                            log("  No previous sync, fetching all open tickets")
-                            data = provider.sync_tickets()
+                        # Legacy mode: full sync of active tickets (backward compatibility)
+                        # This fetches all active tickets with full details
+                        log("  Full sync mode: Fetching all active tickets with full details...")
+                        data = provider.sync_tickets()
+                        count = save_tickets(data, provider_name)
+                        results['counts']['tickets'] = count
+                        log(f"  Synced {count} tickets")
 
-                    count = save_tickets(data, provider_name)
-                    results['counts']['tickets'] = count
-                    log(f"  Synced {count} tickets")
-
-                    # Reconcile deleted tickets - either forced or alternating pattern
-                    # Force reconcile = always run (manual GUI button clicks)
-                    # Alternating = every other sync for scheduled syncs (detects deletes every 6 min)
-                    import os
-
-                    if force_reconcile:
-                        # Manual sync from GUI - always run full reconciliation
-                        log("  Running full reconciliation (forced by manual sync)")
-                        reconcile_results = reconcile_deleted_tickets(provider, provider_name)
-                        results['counts']['tickets_reconciled'] = reconcile_results['updated']
-                        results['counts']['tickets_cleaned'] = reconcile_results['deleted']
-                    else:
-                        # Scheduled sync - use alternating pattern to avoid rate limiting
-                        # Track sync count using a simple counter file
-                        sync_counter_file = os.path.join(app.instance_path, f'{provider_name}_sync_counter.txt')
-
-                        try:
-                            if os.path.exists(sync_counter_file):
-                                with open(sync_counter_file, 'r') as f:
-                                    sync_count = int(f.read().strip())
-                            else:
-                                sync_count = 0
-
-                            # Increment counter
-                            sync_count += 1
-
-                            # Save updated counter
-                            with open(sync_counter_file, 'w') as f:
-                                f.write(str(sync_count))
-
-                            # Run reconciliation every other sync (even numbers)
-                            if sync_count % 2 == 0:
-                                log(f"  Running full reconciliation (sync #{sync_count})")
-                                reconcile_results = reconcile_deleted_tickets(provider, provider_name)
-                                results['counts']['tickets_reconciled'] = reconcile_results['updated']
-                                results['counts']['tickets_cleaned'] = reconcile_results['deleted']
-                            else:
-                                log(f"  Skipping reconciliation (sync #{sync_count}, will run on next sync)")
-                                results['counts']['tickets_reconciled'] = 0
-                                results['counts']['tickets_cleaned'] = 0
-
-                        except (ValueError, IOError) as e:
-                            log(f"  Warning: Could not read sync counter, running reconciliation: {e}")
-                            # On error, just run reconciliation to be safe
+                        # Legacy reconciliation for backward compatibility
+                        if force_reconcile:
+                            log("  Running full reconciliation (forced)")
                             reconcile_results = reconcile_deleted_tickets(provider, provider_name)
                             results['counts']['tickets_reconciled'] = reconcile_results['updated']
                             results['counts']['tickets_cleaned'] = reconcile_results['deleted']
@@ -857,15 +990,43 @@ def sync_provider(provider_name: str, sync_type: str, config, full_history: bool
 
 def main():
     """Main entry point."""
-    parser = argparse.ArgumentParser(description='Sync data from PSA systems')
+    parser = argparse.ArgumentParser(
+        description='Sync data from PSA systems',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Ticket Sync Modes:
+  --light         Light sync (Beacon): Filter-only, no individual ticket API calls.
+                  Fast (~2 API calls per 100 tickets). Detects deleted tickets.
+                  Run every 5 minutes for Beacon dashboard.
+
+  --detail        Detail sync (Ledger): Full ticket details for recently updated tickets.
+                  Fetches conversations, notes, and time entries (last 48 hours).
+                  Run daily for Ledger billing calculations.
+
+  --full-history  Full history: Fetch ALL tickets ever created with full details.
+                  Use for initial data load or disaster recovery. Manual only.
+
+  (no flag)       Legacy mode: Full sync of active tickets with all details.
+                  Slower than light sync. Use --light for scheduled syncs.
+
+Examples:
+  python sync_psa.py --provider freshservice --type tickets --light
+  python sync_psa.py --provider freshservice --type tickets --detail
+  python sync_psa.py --provider freshservice --type tickets --full-history
+        """
+    )
     parser.add_argument('--provider', type=str, help='PSA provider name (freshservice, superops)')
     parser.add_argument('--type', type=str, default='all',
                        choices=['companies', 'contacts', 'agents', 'tickets', 'base', 'all'],
                        help='Type of data to sync (base = companies, contacts, agents without tickets)')
+    parser.add_argument('--light', action='store_true',
+                       help='Light sync: Filter-only for Beacon (fast, every 5 min)')
+    parser.add_argument('--detail', action='store_true',
+                       help='Detail sync: Full details for recent tickets (for Ledger, daily)')
     parser.add_argument('--full-history', action='store_true',
-                       help='For tickets, fetch all history instead of recent')
+                       help='Full history: Fetch ALL tickets ever (manual only)')
     parser.add_argument('--force-reconcile', action='store_true',
-                       help='For tickets, always run full reconciliation to detect deleted tickets')
+                       help='[Legacy] Force full reconciliation (not needed with --light)')
     parser.add_argument('--all-providers', action='store_true',
                        help='Sync all enabled providers')
     parser.add_argument('--list-providers', action='store_true',
@@ -910,7 +1071,9 @@ def main():
                 args.type,
                 config,
                 full_history=args.full_history,
-                force_reconcile=args.force_reconcile
+                force_reconcile=args.force_reconcile,
+                light_sync=args.light,
+                detail_sync=args.detail
             )
             all_results.append(results)
 
