@@ -2174,19 +2174,15 @@ def api_get_psa_config():
             if not web_domain:
                 web_domain = config.get('freshservice', 'domain', fallback='freshservice.com')
 
-            # Load group IDs for Beacon ticket filtering
-            ps_group_id = config.get('freshservice', 'professional_services_group_id', fallback=None)
-            helpdesk_group_id = config.get('freshservice', 'helpdesk_group_id', fallback=None)
+            # Get group IDs from provider class (hardcoded, vendor-specific)
+            from app.psa.freshservice import FreshserviceProvider
 
             providers['freshservice'] = {
                 'name': 'Freshservice',
                 'ticket_url_template': f'https://{web_domain}/a/tickets/{{ticket_id}}',
                 'company_url_template': f'https://{web_domain}/a/admin/departments/{{company_id}}',
                 'contact_url_template': f'https://{web_domain}/a/requesters/{{contact_id}}',
-                'group_ids': {
-                    'professional_services': int(ps_group_id) if ps_group_id else None,
-                    'helpdesk': int(helpdesk_group_id) if helpdesk_group_id else None,
-                }
+                'group_ids': FreshserviceProvider.GROUP_IDS,
             }
 
         # Superops config (when available)
