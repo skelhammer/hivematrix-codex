@@ -1,5 +1,5 @@
 from flask import Blueprint, render_template, g, request, redirect, url_for, jsonify, current_app
-from app.auth import token_required
+from app.auth import token_required, validate_pagination
 from models import Company, BillingPlan, PlanFeature, Location, CompanyFeatureOverride, FeatureOption, db
 from sqlalchemy import asc, desc
 
@@ -14,6 +14,7 @@ def search_companies_api():
 
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 50, type=int)
+    page, per_page = validate_pagination(page, per_page)
     sort_by = request.args.get('sort_by', 'name')
     order = request.args.get('order', 'asc')
     search_query = request.args.get('search', '').strip()
@@ -70,6 +71,7 @@ def list_companies():
 
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 50, type=int)
+    page, per_page = validate_pagination(page, per_page)
     sort_by = request.args.get('sort_by', 'name')
     order = request.args.get('order', 'asc')
     search_query = request.args.get('search', '').strip()

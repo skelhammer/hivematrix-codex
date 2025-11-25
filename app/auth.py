@@ -2,6 +2,34 @@ from functools import wraps
 from flask import request, g, current_app, abort
 import jwt
 
+# Pagination limits to prevent DoS attacks
+MAX_PER_PAGE = 500
+DEFAULT_PER_PAGE = 50
+
+
+def validate_pagination(page: int, per_page: int) -> tuple:
+    """
+    Validate and sanitize pagination parameters.
+
+    Args:
+        page: Page number (1-indexed)
+        per_page: Items per page
+
+    Returns:
+        tuple: (validated_page, validated_per_page)
+    """
+    # Ensure page is at least 1
+    if page < 1:
+        page = 1
+
+    # Ensure per_page is within bounds
+    if per_page < 1:
+        per_page = DEFAULT_PER_PAGE
+    elif per_page > MAX_PER_PAGE:
+        per_page = MAX_PER_PAGE
+
+    return page, per_page
+
 # Cache for Core's public key
 jwks_client = None
 
@@ -52,7 +80,8 @@ def token_required(f):
                 g.is_service_call = False
                 
         except jwt.PyJWTError as e:
-            abort(401, description=f"Invalid Token: {e}")
+            current_app.logger.warning(f"JWT validation failed: {e}")
+            abort(401, description="Invalid or expired token")
 
         return f(*args, **kwargs)
     return decorated_function
