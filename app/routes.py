@@ -1780,7 +1780,7 @@ def api_list_rmm_devices():
         type: string
         required: false
         description: Filter by company account number
-        example: "965"
+        example: "123456"
       - name: status
         in: query
         type: string
@@ -1815,7 +1815,7 @@ def api_list_rmm_devices():
                     example: "WORKSTATION-001"
                   company_id:
                     type: string
-                    example: "965"
+                    example: "123456"
                   company_name:
                     type: string
                     example: "Acme Corporation"
@@ -1921,7 +1921,7 @@ def api_get_rmm_device(device_id):
               example: "WORKSTATION-001"
             company_id:
               type: string
-              example: "965"
+              example: "123456"
             company_name:
               type: string
               example: "Acme Corporation"
