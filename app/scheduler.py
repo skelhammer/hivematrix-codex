@@ -42,13 +42,19 @@ def run_sync_script(script_name):
 
         logger.info(f"Running scheduled sync: {script_name}")
 
-        # Determine script type for SyncJob record
+        # Determine script type and provider for SyncJob record
+        script_type = None
+        provider = None
+
         if 'ticket' in script_name:
             script_type = 'tickets'
         elif 'freshservice' in script_name:
             script_type = 'freshservice'
-        elif 'datto' in script_name:
-            script_type = 'datto'
+        elif 'rmm' in script_name or 'datto' in script_name:
+            script_type = 'rmm'
+            # Get RMM provider from config
+            with _app.app_context():
+                provider = _app.config.get('RMM_DEFAULT_PROVIDER', 'datto')
         else:
             script_type = script_name.replace('.py', '')
 
@@ -64,6 +70,7 @@ def run_sync_script(script_name):
                 job = SyncJob(
                     id=job_id,
                     script=script_type,
+                    provider=provider,
                     status='running',
                     started_at=datetime.now(timezone.utc).isoformat()
                 )

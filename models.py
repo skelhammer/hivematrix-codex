@@ -312,6 +312,12 @@ class TicketDetail(db.Model):
     first_responded_at = db.Column(db.String(50))  # When first response was made
     agent_responded_at = db.Column(db.String(50))  # When agent last responded
 
+    # Organization tracking
+    department_id = db.Column(BigInteger)  # Department/company ID in PSA
+
+    # Webhook tracking
+    webhook_updated_at = db.Column(db.String(50))  # Last webhook update timestamp (for debugging)
+
     # Conversation history stored as JSON
     conversations = db.Column(db.Text)  # JSON array of conversation entries
     notes = db.Column(db.Text)  # JSON array of internal notes

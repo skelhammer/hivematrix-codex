@@ -28,6 +28,18 @@ def get_default_psa_provider():
     return config.get('psa', 'default_provider', fallback='freshservice')
 
 
+def get_default_rmm_provider():
+    """Get the default RMM provider from configuration.
+
+    Returns:
+        str: Provider name (e.g., 'datto', 'superops')
+    """
+    config_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'instance', 'codex.conf')
+    config = configparser.RawConfigParser()
+    config.read(config_path)
+    return config.get('rmm', 'default_provider', fallback='datto')
+
+
 @app.route('/')
 @token_required
 def index():
@@ -156,6 +168,66 @@ def sync_psa():
         }), 500
 
 
+@app.route('/sync/tickets', methods=['POST'])
+@token_required
+def sync_tickets():
+    """
+    Trigger Tier 2 (detail) ticket sync in background.
+
+    This fetches full ticket details for recently updated tickets.
+    Used by Beacon's "Sync Tickets" button for on-demand sync.
+
+    Requires technician or admin permission.
+    """
+    from flask import g
+
+    # Check permission - allow technicians and admins
+    if not g.is_service_call:
+        permission = g.user.get('permission_level', 'client')
+        if permission not in ('admin', 'technician'):
+            return jsonify({
+                'success': False,
+                'error': 'Permission denied. Technician or admin access required.'
+            }), 403
+
+    try:
+        job_id = str(uuid.uuid4())
+        script_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'sync_psa.py')
+        provider = get_default_psa_provider()
+
+        # Create job entry in database
+        job = SyncJob(
+            id=job_id,
+            script='psa',
+            provider=provider,
+            sync_type='tickets-detail',
+            status='running',
+            started_at=datetime.now(timezone.utc).isoformat()
+        )
+        db.session.add(job)
+        db.session.commit()
+
+        # Start background thread with --detail flag for Tier 2 sync
+        thread = threading.Thread(
+            target=run_sync_script,
+            args=(job_id, script_path, ['--provider', provider, '--type', 'tickets', '--detail'])
+        )
+        thread.daemon = True
+        thread.start()
+
+        return jsonify({
+            'success': True,
+            'job_id': job_id,
+            'message': f'Ticket detail sync started in background ({provider})'
+        })
+    except Exception as e:
+        app.logger.error(f"Ticket sync failed: {e}")
+        return jsonify({
+            'success': False,
+            'error': 'Internal server error'
+        }), 500
+
+
 @app.route('/sync/datto', methods=['POST'])
 @admin_required
 def sync_datto():
@@ -164,11 +236,13 @@ def sync_datto():
         job_id = str(uuid.uuid4())
         script_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'sync_rmm.py')
         follow_up_script = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'app', 'rmm', 'push_account_numbers.py')
+        rmm_provider = get_default_rmm_provider()
 
         # Create job entry in database
         job = SyncJob(
             id=job_id,
-            script='datto',
+            script='rmm',
+            provider=rmm_provider,
             status='running',
             started_at=datetime.now(timezone.utc).isoformat()
         )
@@ -186,16 +260,30 @@ def sync_datto():
             'message': 'RMM sync started in background (will auto-push account numbers)'
         })
     except Exception as e:
-        app.logger.error(f"Datto sync failed: {e}")
+        app.logger.error(f"RMM sync failed: {e}")
         return jsonify({
             'success': False,
             'error': 'Internal server error'
         }), 500
 
 @app.route('/sync/status/<job_id>', methods=['GET'])
-@admin_required
+@token_required
 def sync_status(job_id):
-    """Check status of a background sync job with live progress."""
+    """Check status of a background sync job with live progress.
+
+    Accessible by technicians and admins (not just admins).
+    """
+    from flask import g
+
+    # Check permission - allow technicians and admins
+    if not g.is_service_call:
+        permission = g.user.get('permission_level', 'client')
+        if permission not in ('admin', 'technician'):
+            return jsonify({
+                'success': False,
+                'error': 'Permission denied. Technician or admin access required.'
+            }), 403
+
     job = db.session.get(SyncJob, job_id)
     if not job:
         return jsonify({'error': 'Job not found'}), 404
@@ -845,48 +933,6 @@ def api_get_company_tickets(account_number):
         'conversations': json.loads(t.conversations) if t.conversations else [],
         'notes': json.loads(t.notes) if t.notes else []
     } for t in tickets])
-
-
-@app.route('/sync/tickets', methods=['POST'])
-@admin_required
-def sync_tickets():
-    """Trigger PSA ticket sync script in background."""
-    try:
-        job_id = str(uuid.uuid4())
-        script_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'sync_psa.py')
-        provider = get_default_psa_provider()
-
-        # Create job entry in database
-        job = SyncJob(
-            id=job_id,
-            script='psa',
-            provider=provider,
-            sync_type='tickets',
-            status='running',
-            started_at=datetime.now(timezone.utc).isoformat()
-        )
-        db.session.add(job)
-        db.session.commit()
-
-        # Start background thread with force-reconcile flag for immediate deletion detection
-        thread = threading.Thread(
-            target=run_sync_script,
-            args=(job_id, script_path, ['--provider', provider, '--type', 'tickets', '--force-reconcile'])
-        )
-        thread.daemon = True
-        thread.start()
-
-        return jsonify({
-            'success': True,
-            'job_id': job_id,
-            'message': f'{provider.title()} ticket sync started in background'
-        })
-    except Exception as e:
-        app.logger.error(f"Ticket sync failed: {e}")
-        return jsonify({
-            'success': False,
-            'error': 'Internal server error'
-        }), 500
 
 
 @app.route('/sync/tickets/full-history', methods=['POST'])
@@ -2127,20 +2173,37 @@ def api_get_psa_config():
             web_domain = config.get('freshservice', 'web_domain', fallback=None)
             if not web_domain:
                 web_domain = config.get('freshservice', 'domain', fallback='freshservice.com')
+
+            # Load group IDs for Beacon ticket filtering
+            ps_group_id = config.get('freshservice', 'professional_services_group_id', fallback=None)
+            helpdesk_group_id = config.get('freshservice', 'helpdesk_group_id', fallback=None)
+
             providers['freshservice'] = {
                 'name': 'Freshservice',
                 'ticket_url_template': f'https://{web_domain}/a/tickets/{{ticket_id}}',
                 'company_url_template': f'https://{web_domain}/a/admin/departments/{{company_id}}',
-                'contact_url_template': f'https://{web_domain}/a/requesters/{{contact_id}}'
+                'contact_url_template': f'https://{web_domain}/a/requesters/{{contact_id}}',
+                'group_ids': {
+                    'professional_services': int(ps_group_id) if ps_group_id else None,
+                    'helpdesk': int(helpdesk_group_id) if helpdesk_group_id else None,
+                }
             }
 
         # Superops config (when available)
-        if config.has_section('psa.superops'):
+        if config.has_section('superops'):
+            # TODO: Update URL templates when SuperOps is implemented
+            ps_group_id = config.get('superops', 'professional_services_group_id', fallback=None)
+            helpdesk_group_id = config.get('superops', 'helpdesk_group_id', fallback=None)
+
             providers['superops'] = {
                 'name': 'SuperOps',
                 'ticket_url_template': 'https://app.superops.com/tickets/{ticket_id}',
                 'company_url_template': 'https://app.superops.com/companies/{company_id}',
-                'contact_url_template': 'https://app.superops.com/contacts/{contact_id}'
+                'contact_url_template': 'https://app.superops.com/contacts/{contact_id}',
+                'group_ids': {
+                    'professional_services': int(ps_group_id) if ps_group_id else None,
+                    'helpdesk': int(helpdesk_group_id) if helpdesk_group_id else None,
+                }
             }
 
     except Exception as e:

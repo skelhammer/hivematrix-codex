@@ -41,6 +41,13 @@ class FreshserviceProvider(PSAProvider):
     name = 'freshservice'
     display_name = 'Freshservice'
 
+    # Freshservice-specific group IDs (configure in codex.conf [freshservice] section)
+    # These are used by Beacon to filter tickets by team/department
+    DEFAULT_GROUP_IDS = {
+        'professional_services': None,  # Set in config: professional_services_group_id
+        'helpdesk': None,               # Set in config: helpdesk_group_id (optional)
+    }
+
     def __init__(self, config):
         """
         Initialize Freshservice provider.
@@ -50,6 +57,8 @@ class FreshserviceProvider(PSAProvider):
                 - domain: API domain (e.g., 'company.freshservice.com')
                 - api_key: Freshservice API key
                 - web_domain: (optional) Custom domain for ticket links
+                - professional_services_group_id: (optional) Group ID for PS tickets
+                - helpdesk_group_id: (optional) Group ID for helpdesk tickets
         """
         super().__init__(config)
 
@@ -60,6 +69,23 @@ class FreshserviceProvider(PSAProvider):
             self.web_domain = config.get('freshservice', 'web_domain', fallback=self.domain)
         except Exception as e:
             raise AuthenticationError(f"Missing Freshservice configuration: {e}")
+
+        # Load group IDs for ticket filtering (used by Beacon)
+        # Use get() first to handle empty strings, then convert to int if value exists
+        def safe_getint(section, key):
+            """Get int from config, returning None for empty or missing values."""
+            val = config.get(section, key, fallback=None)
+            if val is None or val.strip() == '':
+                return None
+            try:
+                return int(val)
+            except ValueError:
+                return None
+
+        self.group_ids = {
+            'professional_services': safe_getint('freshservice', 'professional_services_group_id'),
+            'helpdesk': safe_getint('freshservice', 'helpdesk_group_id'),
+        }
 
         self.base_url = f"https://{self.domain}/api/v2"
         self.auth = (self.api_key, 'X')  # Freshservice uses API key as username, 'X' as password

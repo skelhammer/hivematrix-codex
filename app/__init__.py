@@ -236,6 +236,7 @@ Swagger(app, config=swagger_config, template=swagger_template)
 
 from app import routes
 from app import agent_routes  # Agent management and Keycloak sync routes
+from app import webhook_routes  # PSA webhook receivers for real-time updates
 
 # Initialize background scheduler for auto-sync (optional)
 try:

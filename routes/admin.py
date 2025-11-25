@@ -52,43 +52,53 @@ def get_sync_display_name(script, provider=None, sync_type=None):
         'superops': 'Superops',
     }
 
-    # Sync type display names
-    sync_type_names = {
-        'base': 'Base',
-        'companies': 'Companies',
-        'contacts': 'Contacts',
-        'agents': 'Agents',
-        'tickets': 'Tickets',
-        'all': 'Full',
-    }
-
     if script == 'psa':
         provider_name = provider_names.get(provider, provider.title() if provider else 'PSA')
 
-        if sync_type == 'tickets':
-            return f"{provider_name} Tickets"
+        # Ticket syncs - all variants show as "[Provider] Tickets"
+        if sync_type and sync_type.startswith('tickets'):
+            return f"[{provider_name}] Tickets"
+        # Base sync (companies, contacts, agents) - shows as "[Provider] Sync"
         elif sync_type == 'base':
-            return f"{provider_name} Sync"
+            return f"[{provider_name}] Sync"
+        # Full sync - shows as "[Provider] Full Sync"
         elif sync_type == 'all':
-            return f"{provider_name} Full Sync"
-        elif sync_type in sync_type_names:
-            return f"{provider_name} {sync_type_names[sync_type]}"
+            return f"[{provider_name}] Full Sync"
+        # Individual entity syncs
+        elif sync_type in ('companies', 'contacts', 'agents'):
+            return f"[{provider_name}] {sync_type.title()}"
         else:
-            return f"{provider_name} Sync"
+            return f"[{provider_name}] Sync"
+
+    elif script == 'rmm':
+        # RMM sync (Datto, SuperOps RMM, etc.)
+        rmm_provider_names = {
+            'datto': 'Datto',
+            'superops': 'SuperOps',
+        }
+        provider_name = rmm_provider_names.get(provider, provider.title() if provider else 'RMM')
+        return f"[{provider_name}] Sync"
 
     elif script == 'datto':
-        return "Datto Sync"
+        # Legacy datto sync
+        return "[Datto] Sync"
 
     elif script == 'tickets':
         # Legacy ticket sync
-        return "Ticket Sync"
+        return "[PSA] Tickets"
 
     elif script == 'freshservice':
         # Legacy freshservice sync
-        return "Freshservice Sync"
+        return "[Freshservice] Sync"
 
     elif script == 'create-account-numbers':
         return "Create Account Numbers"
+
+    elif script == 'push-to-datto':
+        return "[Datto] Push Account Numbers"
+
+    elif script in ('keycloak-agents', 'keycloak_agents'):
+        return "[Keycloak] Agents"
 
     else:
         # Fallback: capitalize the script name
