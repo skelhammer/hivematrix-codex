@@ -42,6 +42,15 @@ def _import_app():
     """Import app and db after config file exists."""
     global app, db
     if app is None:
+        # Skip scheduler initialization and reduce logging during database setup
+        os.environ['CODEX_SKIP_SCHEDULER'] = '1'
+        os.environ['SERVICE_NAME'] = 'codex'  # Prevent "unknown service" log message
+
+        # Suppress most logging during init
+        import logging
+        logging.getLogger('app').setLevel(logging.WARNING)
+        logging.getLogger('app.scheduler').setLevel(logging.ERROR)
+
         from app import app as flask_app
         from extensions import db as database
         # Import ALL models so SQLAlchemy knows about them

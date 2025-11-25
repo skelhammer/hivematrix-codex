@@ -242,14 +242,16 @@ from app import agent_routes  # Agent management and Keycloak sync routes
 from app import webhook_routes  # PSA webhook receivers for real-time updates
 
 # Initialize background scheduler for auto-sync (optional)
-try:
-    from app.scheduler import init_scheduler
-    init_scheduler(app)
-    helm_logger.info("Background sync scheduler initialized")
-except ImportError as e:
-    helm_logger.warning(f"Scheduler not available (APScheduler not installed): {e}")
-except Exception as e:
-    helm_logger.error(f"Failed to initialize scheduler: {e}")
+# Skip scheduler during database initialization (init_db.py sets CODEX_SKIP_SCHEDULER=1)
+if not os.environ.get('CODEX_SKIP_SCHEDULER'):
+    try:
+        from app.scheduler import init_scheduler
+        init_scheduler(app)
+        helm_logger.info("Background sync scheduler initialized")
+    except ImportError as e:
+        helm_logger.warning(f"Scheduler not available (APScheduler not installed): {e}")
+    except Exception as e:
+        helm_logger.error(f"Failed to initialize scheduler: {e}")
 
 # Log service startup
 service_name = app.config['SERVICE_NAME']
